@@ -1,0 +1,8 @@
+pandas~=1.2.0
+selenium~=3.141.0
+bs4~=0.0.1
+jinja2~=2.11.2
+lxml
+requests~=2.25.1
+scikit-learn~=0.24.0
+beautifulsoup4~=4.9.3
