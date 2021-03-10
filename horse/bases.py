@@ -9,42 +9,55 @@ from horse.constants import BASES_DIR, ODDSCHECKER_DIR, BETFAIR_DIR, ODDFAIR_DIR
 from horse.utils import financial_result, is_winner, prepare_bbc_dataset
 
 
-def pre_race_base(date_string):
+def pre_race_base(date_string, refresh=False):
 
-    oddschecker_filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
-    df_oddschecker = pd.read_csv(oddschecker_filename, parse_dates=['date'])
+    file_extensions = ['_v1']
+    if refresh:
+        file_extensions.append('')
 
-    betfair_filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-    df_betfair = pd.read_csv(betfair_filename, parse_dates=['date'])
+    for ext in file_extensions:
+        oddschecker_filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}{ext}.csv')
+        df_oddschecker = pd.read_csv(oddschecker_filename, parse_dates=['date'])
 
-    df_join = pd.merge(df_betfair,
-                       df_oddschecker,
-                       how='left',
-                       on=['date', 'time', 'city', 'horse'],
-                       suffixes=('_betfair', '_oddschecker'))
+        betfair_filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
+        df_betfair = pd.read_csv(betfair_filename, parse_dates=['date'])
 
-    df_join.sort_values(by=['time', 'oddschecker'], ignore_index=True, inplace=True)
-    df_join.rename(columns={"oddschecker": "odds", "horses_race_betfair": "horses_race"},
-                   errors="ignore",
-                   inplace=True)
+        df_join = pd.merge(df_betfair,
+                           df_oddschecker,
+                           how='left',
+                           on=['date', 'time', 'city', 'horse'],
+                           suffixes=('_betfair', '_oddschecker'))
 
-    historical_filename = os.path.join(BASES_DIR, f'base_bbc_full.csv')
-    df_history = pd.read_csv(historical_filename, low_memory=False, parse_dates=['date'])
-    df_join = prepare_bbc_dataset(df_join, df_history, pre_race=True)
+        df_join.sort_values(by=['time', 'oddschecker'], ignore_index=True, inplace=True)
+        df_join.rename(columns={"oddschecker": "odds", "horses_race_betfair": "horses_race"},
+                       errors="ignore",
+                       inplace=True)
+
+        historical_filename = os.path.join(BASES_DIR, f'base_bbc_full.csv')
+        df_history = pd.read_csv(historical_filename, low_memory=False, parse_dates=['date'])
+        df_join = prepare_bbc_dataset(df_join, df_history, pre_race=True)
 
 
-    # for index, column in df_join.iterrows():
-    #
-    #     if index:
-    #         if column['city'] == df_join.loc[index-1, 'city'] and column['time'] == df_join.loc[index-1, 'time']:
-    #             df_join.loc[index, 'started'] = df_join.loc[index - 1, 'started'] + 1
-    #         else:
-    #             df_join.loc[index, 'started'] = 1
-    #
-    # df_join = get_history(df_join)
+        # for index, column in df_join.iterrows():
+        #
+        #     if index:
+        #         if column['city'] == df_join.loc[index-1, 'city'] and column['time'] == df_join.loc[index-1, 'time']:
+        #             df_join.loc[index, 'started'] = df_join.loc[index - 1, 'started'] + 1
+        #         else:
+        #             df_join.loc[index, 'started'] = 1
+        #
+        # df_join = get_history(df_join)
 
-    filename = os.path.join(BASES_DIR, ODDFAIR_DIR, f'base_pre_race_{date_string}.csv')
-    df_join.to_csv(f'{filename}', index=False)
+        filename = os.path.join(BASES_DIR, ODDFAIR_DIR, f'base_pre_race_{date_string}{ext}.csv')
+        df_join.to_csv(f'{filename}', index=False)
+
+        print('Updating Pre Race Full')
+
+        df_pre_race_full = pd.read_csv(os.path.join(BASES_DIR, 'base_pre_race_full.csv'))
+        df_pre_race_full = df_pre_race_full.append(df_join)
+        df_pre_race_full.drop_duplicates(subset=['date', 'time', 'city', 'horse'], keep='last', inplace=True)
+        df_pre_race_full.sort_values(by=['date', 'city', 'time', 'started'], ignore_index=True, inplace=True)
+        df_pre_race_full.to_csv(os.path.join(BASES_DIR, 'base_pre_race_full.csv'), index=False)
 
 
 def get_history(df):

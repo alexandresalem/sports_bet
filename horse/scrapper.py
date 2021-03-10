@@ -16,9 +16,9 @@ from horse.constants import BASES_DIR, WEBDRIVER_PATH, ODDSCHECKER_URL, ODDSCHEC
 from horse.utils import odds, prepare_bbc_dataset
 
 
-def oddschecker(date_string, next_day_screen, table=False):
+def oddschecker(date_string, next_day_screen, table=False, refresh=False):
 
-    if f'base_oddschecker_{date_string}.csv' not in os.listdir(os.path.join(BASES_DIR, ODDSCHECKER_DIR)):
+    if f'base_oddschecker_{date_string}.csv' not in os.listdir(os.path.join(BASES_DIR, ODDSCHECKER_DIR)) or refresh:
         # Setting Chrome Webdriver
 
         # WINDOW_SIZE = "1920,1080"
@@ -35,6 +35,13 @@ def oddschecker(date_string, next_day_screen, table=False):
             sleep(0.5)
         except:
             pass
+
+
+        if refresh:
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
+            df = pd.read_csv(filename)
+            table = True
+
 
         # Tomorrow's schedule
         if next_day_screen:
@@ -65,7 +72,13 @@ def oddschecker(date_string, next_day_screen, table=False):
             race_links = city.find_elements_by_class_name('race-time')
             for race_link in race_links:
                 link = race_link.get_property('href')
-                links.append(link)
+                if refresh:
+                    hour = int(link.split('/')[-2].split(':')[0])
+
+                    if hour > datetime.utcnow().hour:
+                        links.append(link)
+                else:
+                    links.append(link)
 
         for link in links:
             rq = requests.get(link)
@@ -181,12 +194,20 @@ def oddschecker(date_string, next_day_screen, table=False):
                     table = True
 
         df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse'], keep='last')
-        filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
-        df.to_csv(filename, index=False)
+
+        if refresh:
+
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
+            df.to_csv(filename, index=False)
+        else:
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
+            df.to_csv(filename, index=False)
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}_v1.csv')
+            df.to_csv(filename, index=False)
 
 
-def betfair(date_string, next_day_screen, table=False):
-    if f'base_betfair_{date_string}.csv' in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR)):
+def betfair(date_string, next_day_screen, table=False, refresh=False):
+    if f'base_betfair_{date_string}.csv' not in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR)) or refresh:
         # WINDOW_SIZE = "1920,1080"
         # chrome_options = Options()
         # chrome_options.add_argument("--headless")
@@ -198,6 +219,13 @@ def betfair(date_string, next_day_screen, table=False):
         driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH)
         driver.get(BETFAIR_URL)
         sleep(11)
+
+        if refresh:
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
+            df = pd.read_csv(filename)
+            table = True
+
+
         # Accept Cookies Screen
         try:
             driver.find_elements_by_id('onetrust-accept-btn-handler')[0].click()
@@ -239,7 +267,15 @@ def betfair(date_string, next_day_screen, table=False):
                 event_info = driver.find_elements_by_class_name('event-info')[0]
 
                 time = event_info.find_element_by_class_name('venue-name').text.split()[0]
+                hour = int(time.split(":")[0])
+
                 time = (datetime.strptime(time, '%H:%M') + timedelta(hours=6)).strftime('%H:%M')
+
+                if refresh:
+                    if hour > datetime.now().hour:
+
+                        pass
+
                 # time = time.split(':')
                 # time = round(int(time[0]) + (int(time[1]) / 60) + 6, 1)
 
@@ -322,10 +358,18 @@ def betfair(date_string, next_day_screen, table=False):
                         table = True
 
         df['horse'] = df['horse'].str.replace("'", "")
-        df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
-        filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
 
-        df.to_csv(filename, index=False)
+        df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
+
+        if refresh:
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
+            df.to_csv(filename, index=False)
+        else:
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
+            df.to_csv(filename, index=False)
+
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}_v1.csv')
+            df.to_csv(filename, index=False)
 
 
 def bbc(date_string, table=False, force=False):
@@ -442,7 +486,6 @@ def bbc(date_string, table=False, force=False):
         print(f'Carregando arquivo BBC para o dia {date_string}')
         df = pd.read_csv(filename, parse_dates=['date'])
         table = False
-
 
     if table:
         df.drop_duplicates(subset=['date', 'time', 'city', 'horse'], keep='last', inplace=True)

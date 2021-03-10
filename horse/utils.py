@@ -17,23 +17,11 @@ def race_category(title, category):
     return 0
 
 
-def distance_bbc(distance):
-    miles_list = distance.split('m')
-    miles = int(miles_list[0].strip())
-    furlongs_list = miles_list[1].split('f')
-    furlongs = int(furlongs_list[0].strip())
-    yards_list = furlongs_list[1].split('y')
-    yards = int(yards_list[0].strip())
-
-    return (miles * 1760) + (furlongs * 220) + yards
-
-
 def send_mail(template,
               attached_files,
-              to=['friends@friends.com'],
+              mail_to=['me@alexandresalem.com'],
               subject='Horse Race',
               ):
-
 
     gmail_user = input('Type your email address')
     gmail_password = input('Digite seu email')
@@ -42,7 +30,7 @@ def send_mail(template,
     message = MIMEMultipart()
     message['Subject'] = subject
     message['From'] = gmail_user
-    message['To'] = ",".join(to)
+    message['To'] = ",".join(mail_to)
 
     message.attach(MIMEText(template, "html"))
 
@@ -61,22 +49,22 @@ def send_mail(template,
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(gmail_user, gmail_password)
-    server.sendmail(gmail_user, to, msgBody)
+    server.sendmail(gmail_user, mail_to, msgBody)
     server.quit()
 
 
-def financial_result(bet, back, finished):
+def financial_result(bet, back, finished, started=1):
 
     try:
         if int(finished) == 1:
-            return round(bet * (back - 1), 2)
+            return round(bet/started * (back - 1), 2)
         else:
-            return round((-1) * bet, 2)
+            return round((-1) * bet/started, 2)
     except:
         if finished in ['NR', 'Não Finalizada']:
             return round(0, 2)
         else:
-            return round((-1) * bet, 2)
+            return round((-1) * bet/started, 2)
 
 
 def financial_result_model(bet, back, winner, winner_pred):
@@ -113,22 +101,43 @@ def is_winner(finished):
         return 0
 
 
-def distance_in_yards(x):
-    try:
-        a = x.split('m')
-        if len(a) == 1:
-            if len(a[0]) > 1:
-                return int(a[0][0]) * 220
-            else:
-                return int(a[0]) * 8 * 220
-        elif len(a) == 2:
-            if a[1] == "":
-                return int(a[0]) * 8 * 220
-            else:
-                return ((int(a[0]) * 8) + int(a[1][0])) * 220
-    except:
-        return 8 * 220
+def distance_bbc(distance):
+    miles_list = distance.split('m')
+    miles = int(miles_list[0].strip())
+    furlongs_list = miles_list[1].split('f')
+    furlongs = int(furlongs_list[0].strip())
+    yards_list = furlongs_list[1].split('y')
+    yards = int(yards_list[0].strip())
 
+    return (miles * 1760) + (furlongs * 220)
+
+
+def distance_in_yards(distance):
+    try:
+        miles_list = distance.split(r'*m')
+        if len(miles_list) > 1:
+            miles = int(miles_list[0].strip())
+            furlong_list = miles_list[1].split(r'*f')
+        else:
+            miles = 0
+            furlong_list = distance.split(r'*f')
+
+        if len(furlong_list) > 1:
+            furlongs = int(furlong_list[0].strip())
+            yards_list = furlong_list[1].split(r'*y')
+        else:
+            furlongs = 0
+            yards_list = furlong_list[0].split(r'*y')
+
+        if len(yards_list) > 1:
+            yards = int(yards_list[0].strip())
+        else:
+            yards = 0
+
+        return (miles * 1760) + (furlongs * 220)
+    except:
+        import ipdb
+        ipdb.set_trace()
 
 
 def raw_type(race_type):
@@ -259,32 +268,6 @@ def place_bet_2(df, index, win_chance):
 
 def new_strategy(df):
 
-    # df.sort_values(by=['city', 'time', 'win_chance'], ascending=(True, True, False), inplace=True, ignore_index=True)
-    # count = 0
-    # for index, column in df.iterrows():
-    #
-    #     try:
-    #         if df.loc[index, ['city', 'time']].values.tolist() == df.loc[index - 1 - count, ['city', 'time']].values.tolist():
-    #             df.drop([index], inplace=True)
-    #             # df.sort_values(by=['city', 'time', 'win_chance'], ascending=(True, True, False), inplace=True,
-    #             #                ignore_index=True)
-    #             # index -= 1
-    #             count += 1
-    #         else:
-    #             count = 0
-    #
-    #     except:
-    #         print(f'Erro linha {index}')
-
-    # df = df[df['won_last_race'] == 0]
-    # df = df[df['started'] == 1]
-    # df = df[df['jockey_won_last_15_races'] == 0]
-    #
-
-    # df.sort_values(by=['city', 'time', 'win_chance'], ascending=(True, True, False), inplace=True, ignore_index=True)
-    # df[f'apostar'] = df.apply(lambda x: place_bet_2(df, x.name, x.win_chance), axis=1)
-    # df = df[df['apostar'] == 1]
-
     df = df[df['win_chance'] > 0.5]
     # df = df[df['won_last_race'] == 0]
     # df = df[df['best_position'] > 1]
@@ -292,8 +275,9 @@ def new_strategy(df):
     # df = df[df['best_position_adv1'] > 1]
     # df = df[df['jockey_won_yesterday'] == 0]
     # df = df[df['started'] <= 1]
-    # df = df[df['horses_race_betfair'] <= 10]
-    # df = df.drop_duplicates(subset=['date', 'time', 'city'], keep='first')
+    # df = df[df['horses_race'] < 10]
+    # # df = df[df['odds'] > 1.00]
+    # df = df.drop_duplicates(subset=['date', 'time', 'city'], keep='last')
 
     return df
 
@@ -309,7 +293,7 @@ def horse_last_results(df_history, horse, date, i):
     df = df_history[(df_history['horse'] == horse) & (df_history['date'] < date)]
     df.reset_index(inplace=True)
     try:
-        return df.loc[len(df) - i, 'finished']
+        return df.loc[len(df) - i, 'finished_int']
     except:
         return 99
 
@@ -416,6 +400,16 @@ def started(df, index, time):
         return 1
 
 
+def find_jockey(df_history, horse, jockey):
+    jockey = jockey.replace(".", "")
+    new_df = df_history[df_history['horse'] == horse]
+    new_df.sort_values(by=['date'], ascending=False, ignore_index=True, inplace=True)
+    for index, column in new_df.iterrows():
+        if column['jockey'][-3] == jockey[-3]:
+            return column['jockey']
+    return jockey
+
+
 def prepare_bbc_dataset(df, df_history, pre_race=False):
     df['date'] = pd.to_datetime(df['date'])
     df_history['date'] = pd.to_datetime(df_history['date'])
@@ -425,6 +419,15 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
 
     if not pre_race:
         df['odds'] = df.apply(lambda row: odds(row['odds']), axis=1)
+        df = df[df['odds'] < 1000]
+    else:
+        df = df[df['betfair_back'] < 999]
+        new_df = df['odd_list'].str.split(pat=r"\[|\]|, ", expand=True, n=25)
+
+        df['odds'] = new_df[3].fillna('0').replace('', '0').astype('float32')
+        df['jockey'] = df.apply(lambda x: find_jockey(df_history, x['horse'], x['jockey']), axis=1)
+
+    df.reset_index(drop=True, inplace=True)
 
     df.sort_values(by=['date', 'city', 'time', 'odds'], ignore_index=True, inplace=True)
 
@@ -438,10 +441,14 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
                     df.loc[index - count + i + 1, 'horses_race'] = count
 
                 count = 1
+
             else:
                 count += 1
         except:
-            pass
+            for i in range(count):
+                df.loc[index - count + i + 1, 'horses_race'] = count
+
+            count = 1
 
     #     if index % 10000 == 0:
     #         print(index)
@@ -514,9 +521,6 @@ def prepare_model_dataset(df, run=False, le=None):
                 'adv1-1': position_replace,
                 'adv2-1': position_replace})
 
-    df['adv1_odd'] = df['adv1_odd'] / df['odds']
-    df['adv2_odd'] = df['adv2_odd'] / df['odds']
-
     if 'going' not in df:
         df['going'] = 'standard'
     else:
@@ -538,7 +542,6 @@ def prepare_model_dataset(df, run=False, le=None):
         df['handicap'] = df.apply(lambda x: race_category(x.race_type, 'hcap'), axis=1)
         df['novice'] = df.apply(lambda x: race_category(x.race_type, 'nov'), axis=1)
 
-
     else:
         df['distance_int'] = df.apply(lambda x: distance_bbc(x.distance), axis=1)
         df['hurdle'] = df.apply(lambda x: race_category(x.title, 'hurdle'), axis=1)
@@ -549,7 +552,9 @@ def prepare_model_dataset(df, run=False, le=None):
 
         df['betfair_back'] = df['odds'] + 1
 
-    df['odds'] = df['odds'] + 1
+    df['adv1_odd'] = df['adv1_odd'] - df['odds']
+    df['adv2_odd'] = df['adv2_odd'] - df['odds']
+
     df = df[df['started'] <= 5]
 
     return df, le
