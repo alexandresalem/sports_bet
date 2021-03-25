@@ -1,3 +1,4 @@
+import logging
 import os
 import smtplib
 from datetime import timedelta
@@ -9,7 +10,30 @@ from email.mime.text import MIMEText
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
-from horse.constants import BASES_DIR
+from horse.constants import BASES_DIR, FINANCE_MAIL_LIST, CONSERVADOR
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                    datefmt='%m-%d %H:%M:%S',
+                    filename='horse_race.log',
+                    filemode='a+')
+
+# define a Handler which writes INFO messages or higher to the sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+# set a format which is simpler for console use
+formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+# tell the handler to use this format
+console.setFormatter(formatter)
+# add the handler to the root logger
+logging.getLogger().addHandler(console)
+
+# Now, define a couple of other loggers which might represent areas in your
+# application:
+logger = logging.getLogger()
+
+
+
 
 def race_category(title, category):
     if category in title.lower():
@@ -18,19 +42,20 @@ def race_category(title, category):
 
 
 def send_mail(template,
-              attached_files,
-              mail_to=['me@alexandresalem.com'],
+              attached_files=[],
+              mail_to=FINANCE_MAIL_LIST,
               subject='Horse Race',
               ):
 
-    gmail_user = input('Type your email address')
-    gmail_password = input('Digite seu email')
-
-
+    with open('/home/alexandresalem/mail_info', 'r') as file:
+        text = file.read()
+    gmail_user = text.split(':')[0]
+    gmail_password = text.split(':')[1].replace('\n', '')
     message = MIMEMultipart()
     message['Subject'] = subject
     message['From'] = gmail_user
-    message['To'] = ",".join(mail_to)
+    message['To'] = ""
+    message['Cco'] = ",".join(mail_to)
 
     message.attach(MIMEText(template, "html"))
 
@@ -195,6 +220,19 @@ def strategy(result):
         return 0
 
 
+def going(going):
+    replace_dict = {
+        "standard to slow": "standard",
+        "chase course: good": "good",
+        "chase course: soft to heavy, hurdles course: soft": "soft",
+        "chase course: good, hurdles course: good to soft": "good",
+        "chase course: heavy, hurdles course: soft to heavy": "heavy",
+        "chase course: good to soft": "good to soft",
+        "chase course: soft": "soft"
+    }
+
+    return replace_dict.get(going, going)
+
 def race_type(race, race_type):
     if race.lower() in race_type.lower().split():
         return 1
@@ -251,6 +289,10 @@ def prepare_new_dataset(df):
     return df
 
 
+def place_bet_income(income_pred):
+    return 1 if income_pred > 0.5 else 0
+
+
 def place_bet(win_chance):
     return 1 if win_chance > 0.5 else 0
 
@@ -268,7 +310,24 @@ def place_bet_2(df, index, win_chance):
 
 def new_strategy(df):
 
-    df = df[df['win_chance'] > 0.5]
+    # df.sort_values(by=['date', 'city', 'time', 'loose_chance'], inplace=True, ignore_index=True)
+
+    # count = 0
+    # for index, column in df.iterrows():
+    #     try:
+    #         if df.loc[index, 'time'] == df.loc[index + 1, 'time']:
+    #             count += 1
+    #         else:
+    #             count = 0
+    #
+    #         # if count == 1:
+    #         #     if 0.2 < column['win_chance'] <= 0.5 and column['betfair_back'] > 3:
+    #         #         df.loc[index, 'winner_pred'] = 1
+    #         #         df.loc[index + 1, 'winner_pred'] = 1
+    #     except:
+    #         pass
+
+    df = df[df['winner_pred'] == 1]
     # df = df[df['won_last_race'] == 0]
     # df = df[df['best_position'] > 1]
     # df = df[df['best_position'] < 99]
@@ -400,14 +459,29 @@ def started(df, index, time):
         return 1
 
 
+def betting_house(column):
+    try:
+        return float(column[11].replace('', '0'))
+    except:
+        return 0
+
+
 def find_jockey(df_history, horse, jockey):
-    jockey = jockey.replace(".", "")
-    new_df = df_history[df_history['horse'] == horse]
-    new_df.sort_values(by=['date'], ascending=False, ignore_index=True, inplace=True)
-    for index, column in new_df.iterrows():
-        if column['jockey'][-3] == jockey[-3]:
-            return column['jockey']
-    return jockey
+    try:
+        if pd.isnull(jockey):
+            return jockey
+        else:
+            jockey = jockey.replace(".", "")
+            new_df = df_history[df_history['horse'] == horse]
+            new_df.dropna(subset=['jockey'], inplace=True)
+            new_df.sort_values(by=['date'], ascending=False, ignore_index=True, inplace=True)
+            for index, column in new_df.iterrows():
+                if column['jockey'][-3] == jockey[-3]:
+                    return column['jockey']
+            return jockey
+    except:
+        import ipdb
+        ipdb.set_trace()
 
 
 def prepare_bbc_dataset(df, df_history, pre_race=False):
@@ -416,15 +490,25 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
 
     # Odds
     df.rename(columns={"oddschecker": "odds"}, errors="ignore", inplace=True)
+    df = df.dropna(subset=['odds'])
+    df.reset_index(inplace=True, drop=True)
 
     if not pre_race:
         df['odds'] = df.apply(lambda row: odds(row['odds']), axis=1)
         df = df[df['odds'] < 1000]
     else:
-        df = df[df['betfair_back'] < 999]
-        new_df = df['odd_list'].str.split(pat=r"\[|\]|, ", expand=True, n=25)
+        if 'going' not in df:
+            df['going'] = 'standard'
 
-        df['odds'] = new_df[3].fillna('0').replace('', '0').astype('float32')
+        df['going'] = df.apply(lambda x: going(x['going']), axis=1)
+
+        df = df[df['betfair_back'] < 999]
+
+        new_df = df['odd_list'].str.split(pat=r"\[|\]|, ", expand=True, n=25)
+        new_df.fillna('0', inplace=True)
+
+        # df['odds'] = new_df.apply(lambda x: betting_house(x), axis=1)
+        df['odds'] = new_df[11].fillna('0').replace('', '0').astype('float32')
         df['jockey'] = df.apply(lambda x: find_jockey(df_history, x['horse'], x['jockey']), axis=1)
 
     df.reset_index(drop=True, inplace=True)
@@ -551,6 +635,11 @@ def prepare_model_dataset(df, run=False, le=None):
         df['novice'] = df.apply(lambda x: race_category(x.title, 'novice'), axis=1)
 
         df['betfair_back'] = df['odds'] + 1
+
+        df['income'] = df.apply(lambda row: financial_result(CONSERVADOR,
+                                                             row['betfair_back'],
+                                                             row['winner']),
+                                axis=1)
 
     df['adv1_odd'] = df['adv1_odd'] - df['odds']
     df['adv2_odd'] = df['adv2_odd'] - df['odds']

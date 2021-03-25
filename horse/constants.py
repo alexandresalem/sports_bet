@@ -14,11 +14,13 @@ WEBDRIVER_PATH = os.path.realpath(os.path.join(BASES_DIR, 'chromedriver'))
 # WEBDRIVER_PATH = r'H:\sportsbet\horse\chromedriver.exe'
 
 
+ATTHERACE_DIR = '0_attherace'
 ODDSCHECKER_DIR = '1_oddschecker'
 BETFAIR_DIR = '2_betfair'
 ODDFAIR_DIR = '3_betfair+oddschecker'
 BETS_DIR = '4_palpites'
 BBC_DIR = '5_bbc'
+BBC_PICKLE_DIR = '5_bbc_pickle'
 DAILY_BASES_DIR = '6_bases_diarias'
 HISTORICAL_BASES_DIR = '7_bases_historicas'
 BETS_RESULT_DIR = '8_palpites+bbc'
@@ -37,7 +39,9 @@ AGRESSIVO = 8
 MELHORES_MODELOS = ['Model2']
 
 
+MINUTES_INTERVAL = 2
+RACING_HOURS = range(7, 22)
 
 # MAILING LIST
-FINANCE_MAIL_LIST = ['me@alexandresalem.com']
+FINANCE_MAIL_LIST = []
 

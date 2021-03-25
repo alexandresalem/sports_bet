@@ -1,42 +1,18 @@
+import gc
 import os
 import pickle
 from datetime import datetime, timedelta
 
 import pandas as pd
-import torch
 from sklearn import preprocessing
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-from torch import nn, optim
-from torch.utils.data import Dataset, DataLoader
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
 
-from horse.constants import MODELOS_DIR, BASES_DIR, HISTORICAL_BASES_DIR, BETS_DIR, ODDFAIR_DIR, AGRESSIVO, MEDIANO, \
-    CONSERVADOR
-from horse.utils import financial_result, distance_in_yards, finishing_position, prepare_dataframe, is_winner, \
-    financial_result_model, prepare_new_dataset, place_bet, acerto, prepare_model_dataset
-
-
-class Model:
-    def __init__(self, name, date):
-        self.name = name
-        self.date = date
-
-        # Loading and preparing historical datababse before running model
-        historical_filename = os.path.join(BASES_DIR, HISTORICAL_BASES_DIR, f'base_historica_{date_string}.csv')
-
-    def train(self, monthly=False):
-
-        pass
-
-    def predict(self):
-        pass
-
-    def evaluate(self):
-        pass
+from horse.constants import MODELOS_DIR, BASES_DIR, HISTORICAL_BASES_DIR, BETS_DIR, ODDFAIR_DIR, CONSERVADOR, BBC_DIR, \
+    BBC_PICKLE_DIR
+from horse.utils import logger, place_bet_income
+from horse.utils import financial_result_model, place_bet, acerto, prepare_model_dataset
 
 
 def build_new_model(test=True, clf=None):
@@ -62,7 +38,7 @@ def build_new_model(test=True, clf=None):
                 # List all the months in the dataset
                 years = df['date'].dt.year.unique()
 
-                for year in years[1:]:
+                for year in years[-1:]:
                     result_folder = os.path.join(MODELOS_DIR, 'predictions')
                     train_result_name = f'novo_{column["name"]}_build_train_{year}.csv'
                     scaled_train_result_name = f'scaled_{column["name"]}_build_train_{year}.csv'
@@ -91,6 +67,7 @@ def build_new_model(test=True, clf=None):
                     df_test.reset_index(drop=True, inplace=True)
 
                     X_test = df_test[features]
+
                     X_test_scaled = std_scaler.transform(X_test)
                     df_test_scaled = pd.DataFrame(X_test_scaled)
 
@@ -101,42 +78,56 @@ def build_new_model(test=True, clf=None):
                     model_path = os.path.join(model_folder, model_name)
                     try:
                         clf = pickle.load(open(model_path, 'rb'))
-                        print(f'Carregando Modelo: {model_name}')
-                        print(f'Modelo Carregado!')
+                        logger.info(f'Carregando Modelo: {model_name}')
+                        logger.warning((f'Modelo Carregado!'))
                     except:
                         print(f'Criando Modelo: {model_name}')
-                        max_depth = None if column['max_depth'] == 'None' else column['max_depth']
-                        clf = RandomForestClassifier(n_estimators=column["estimators"],
-                                                     criterion=column['criterion'],
-                                                     min_samples_split=column['min_samples_split'],
-                                                     min_samples_leaf=column['min_samples_leaf'],
-                                                     max_depth=max_depth)
+                        if column['type'] == "RandomForestClassifier":
+
+
+                            max_depth = None if column['max_depth'] == 'None' else column['max_depth']
+                            clf = RandomForestClassifier(n_estimators=column["estimators"],
+                                                         criterion=column['criterion'],
+                                                         min_samples_split=column['min_samples_split'],
+                                                         min_samples_leaf=column['min_samples_leaf'],
+                                                         max_depth=max_depth)
+
+
+                        elif column['type'] == "KneighborsRegressor":
+                            clf = SVR()
+
                         clf.fit(X_train_scaled, y_train)
                         pickle.dump(clf, open(model_path, 'wb'))
                         print(f'Modelo Criado!')
 
                     # Starting Prediction
 
-                    df_test['winner_pred'] = list(clf.predict(X_test_scaled))
-                    df_predict = pd.DataFrame(data=clf.predict_proba(X_test_scaled),
-                                              columns=['loose_chance', 'win_chance'])
+                    if 'Classifier' in column['type']:
+                        df_test['winner_pred'] = list(clf.predict(X_test_scaled))
+                        df_predict = pd.DataFrame(data=clf.predict_proba(X_test_scaled),
+                                                  columns=['loose_chance', 'win_chance'])
 
-                    X_test_export = pd.concat([df_test, df_test_scaled, df_predict], axis=1)
+                        X_test_export = pd.concat([df_test, df_test_scaled, df_predict], axis=1)
+                        X_test_export['place_bet'] = X_test_export.apply(lambda row: place_bet(row['win_chance']), axis=1)
+                    else:
+                        df_test['income_pred'] = list(clf.predict(X_test_scaled))
+                        X_test_export = pd.concat([df_test, df_test_scaled], axis=1)
+                        X_test_export['place_bet'] = X_test_export.apply(lambda row: place_bet_income(row['income_pred']),
+                                                                           axis=1)
 
-                    X_test_export['winner_pred'] = X_test_export.apply(lambda row: place_bet(row['win_chance']), axis=1)
-                    X_test_export['income'] = X_test_export.apply(lambda x: financial_result_model(CONSERVADOR, x['betfair_back'], x['winner'], x['winner_pred']), axis=1)
-                    X_test_export['acerto'] = X_test_export.apply(lambda x: acerto(x['winner'], x['winner_pred']), axis=1)
+                    X_test_export['income_bets'] = X_test_export.apply(lambda x: financial_result_model(CONSERVADOR, x['betfair_back'], x['winner'], x['place_bet']), axis=1)
+                    X_test_export['acerto'] = X_test_export.apply(lambda x: acerto(x['winner'], x['place_bet']), axis=1)
                     X_test_export.to_csv(scaled_test_result_path, index=True)
 
                     # Writting Results
-                    df_models.loc[index, f'lucro_teste_{year}'] = X_test_export['income'].sum()
-                    df_models.loc[index, f'apostas_teste_{year}'] = X_test_export['winner_pred'].sum()
-                    df_models.loc[index, f'acertos_teste_{year}'] = round(X_test_export['acerto'].sum()/X_test_export['winner_pred'].sum(),4)
+                    df_models.loc[index, f'lucro_teste_{year}'] = X_test_export['income_bets'].sum()
+                    df_models.loc[index, f'apostas_teste_{year}'] = X_test_export['place_bet'].sum()
+                    df_models.loc[index, f'acertos_teste_{year}'] = round(X_test_export['acerto'].sum()/X_test_export['place_bet'].sum(),4)
 
                     df_models.to_csv(models, index=False)
 
 
-def run_new_model(date_string, clf=None, days=1, refresh=False):
+def run_new_model(date_string, clf=None, days=1, racing_hours=False):
     models = os.path.join(MODELOS_DIR, 'models.csv')
     df_models = pd.read_csv(models)
 
@@ -144,7 +135,7 @@ def run_new_model(date_string, clf=None, days=1, refresh=False):
 
         if not pd.isnull(column["use"]):
             start = datetime.now()
-            print(f'Preparando as bases para rodar o {column["name"]} para o dia {date_string}')
+            logger.info(f'Modelagem: Preparando as bases para rodar o {column["name"]} para o dia {date_string}')
 
             files = os.listdir(os.path.join(BASES_DIR, ODDFAIR_DIR))
 
@@ -153,17 +144,15 @@ def run_new_model(date_string, clf=None, days=1, refresh=False):
 
             files_list = []
 
-            extensions_list = ['_v1']
-            if refresh:
-                extensions_list.append('')
+            ext = '' if racing_hours else '_v1'
 
-            for ext in extensions_list:
-                for day in date_list:
-                    if f'base_pre_race_{day}.csv' in files:
-                        files_list.append(os.path.join(BASES_DIR,
-                                                       ODDFAIR_DIR,
-                                                       f'base_pre_race_{day}{ext}.csv'))
+            for day in date_list:
+                if f'base_pre_race_{day}{ext}.csv' in files:
+                    files_list.append(os.path.join(BASES_DIR,
+                                                   ODDFAIR_DIR,
+                                                   f'base_pre_race_{day}{ext}.csv'))
 
+            if len(files_list):
                 df_predict = pd.concat([pd.read_csv(file, parse_dates=['date']) for file in files_list],
                                        axis=0,
                                        join='inner').sort_values(by=['date', 'city', 'time'])
@@ -171,12 +160,22 @@ def run_new_model(date_string, clf=None, days=1, refresh=False):
                 # daily_races = os.path.join(BASES_DIR, ODDFAIR_DIR, f'base_pre_race_{date_string}.csv')
                 # df_predict = pd.read_csv(daily_races, parse_dates=['date'])
 
-                historical_filename = os.path.join(BASES_DIR, f'base_bbc_full.csv')
-                df_history = pd.read_csv(historical_filename, low_memory=False, parse_dates=['date'])
+                if racing_hours or f'base_bbc_{date_string}.pickle' in os.listdir(os.path.join(BASES_DIR, BBC_PICKLE_DIR)):
+                    with open(os.path.join(BASES_DIR, BBC_PICKLE_DIR, f'label_encoder_{date_string}.pickle'), 'rb') as handle:
+                        le = pickle.load(handle)
 
-                df_history, le = prepare_model_dataset(df_history)
+                    df_history = pd.read_pickle(os.path.join(BASES_DIR, BBC_PICKLE_DIR, f'base_bbc_{date_string}.pickle'))
+                else:
+                    historical_filename = os.path.join(BASES_DIR, f'base_bbc_full.csv')
+                    df_history = pd.read_csv(historical_filename, low_memory=False, parse_dates=['date'])
+                    df_history, le = prepare_model_dataset(df_history)
+
+                    df_history.to_pickle(os.path.join(BASES_DIR, BBC_PICKLE_DIR, f'base_bbc_{date_string}.pickle'))
+                    with open(os.path.join(BASES_DIR, BBC_PICKLE_DIR, f'label_encoder_{date_string}.pickle'), 'wb') as handle:
+                        pickle.dump(le, handle)
+
                 df_predict, _ = prepare_model_dataset(df_predict, run=True, le=le)
-                print(f'Base do dia {date_string} preparada em {datetime.now() - start} segundos')
+                logger.info(f'Modelagem: Base do dia {date_string} preparada em {datetime.now() - start} segundos')
 
                 features = column['features'].replace(',', '').split()
                 features_scaled = [f'{feature}_scaled' for feature in features]
@@ -188,19 +187,18 @@ def run_new_model(date_string, clf=None, days=1, refresh=False):
 
                 X_train = df_history[features]
                 std_scaler = preprocessing.StandardScaler()
-
                 std_scaler.fit(X_train)
-                X_train_scaled = std_scaler.transform(X_train)
-                df_train_scaled = pd.DataFrame(X_train_scaled, columns=features_scaled)
-                X_train_export = pd.concat([df_history, df_train_scaled], axis=1)
 
-                scaled_train_result_name = f'scaled_{column["name"]}_run_train_{years[-1]}.csv'
-                scaled_test_result_name = f'scaled_{column["name"]}_run_test_{date_string}.csv'
-                result_folder = os.path.join(MODELOS_DIR, 'predictions')
-                scaled_train_result_path = os.path.join(result_folder, scaled_train_result_name)
-                scaled_test_result_path = os.path.join(result_folder, scaled_test_result_name)
-
-                X_train_export.to_csv(scaled_train_result_path, index=False)
+                # VERIFICACAO SE O SCALE ESTA FUNCIONANDO
+                # X_train_scaled = std_scaler.transform(X_train)
+                # df_train_scaled = pd.DataFrame(X_train_scaled, columns=features_scaled)
+                # X_train_export = pd.concat([df_history, df_train_scaled], axis=1)
+                # scaled_train_result_name = f'scaled_{column["name"]}_run_train_{years[-1]}.csv'
+                # scaled_test_result_name = f'scaled_{column["name"]}_run_test_{date_string}.csv'
+                # result_folder = os.path.join(MODELOS_DIR, 'predictions')
+                # scaled_train_result_path = os.path.join(result_folder, scaled_train_result_name)
+                # scaled_test_result_path = os.path.join(result_folder, scaled_test_result_name)
+                # X_train_export.to_csv(scaled_train_result_path, index=False)
 
                 df_predict.dropna(subset=features, inplace=True)
                 df_predict = df_predict[df_predict['started'] <= column['started']]
@@ -211,27 +209,36 @@ def run_new_model(date_string, clf=None, days=1, refresh=False):
                 X_pred_scaled = std_scaler.transform(X_pred)
                 df_pred_scaled = pd.DataFrame(X_pred_scaled, columns=features_scaled)
 
+                del df_history
+                gc.collect()
+
                 try:
                     start = datetime.now()
-                    print(f'Loading Model {column["name"]} Prediction for {date_string}')
+                    logger.info(f'Loading {column["name"]} for {date_string}')
                     clf = pickle.load(
                         open(os.path.join(MODELOS_DIR, 'novos', f'{column["name"]}_2021.model'), 'rb'))
-                    print(f'O modelo {column["name"]} levou {datetime.now() - start} segundos para carregar')
+                    logger.info(f'O {column["name"]} levou {datetime.now() - start} segundos para carregar')
 
-                    print(f'Started Model {column["name"]} Prediction for {date_string}')
+                    logger.info(f'Rodando Modelo: Started Model {column["name"]} Prediction for {date_string}')
                     df_results = pd.DataFrame(data=clf.predict_proba(X_pred_scaled), columns=['loose_chance', 'win_chance'])
 
-                    X_pred_export = pd.concat([df_predict, df_pred_scaled, df_results], axis=1)
+                    del clf
+                    gc.collect()
 
+                    X_pred_export = pd.concat([df_predict, df_pred_scaled, df_results], axis=1)
                     X_pred_export['winner_pred'] = X_pred_export.apply(lambda row: place_bet(row['win_chance']), axis=1)
-                    X_pred_export.to_csv(scaled_test_result_path, index=True)
+                    # X_pred_export.to_csv(scaled_test_result_path, index=True)
 
                     if days == 1:
                         filename = os.path.join(BASES_DIR, BETS_DIR, f'aposta_{column["name"]}_{date_string}{ext}.csv')
                     else:
                         filename = os.path.join(BASES_DIR, BETS_DIR, f'aposta_{column["name"]}_{date_string}_days_{days}{ext}.csv')
+
+                    X_pred_export.drop_duplicates(subset=['date', 'time', 'city', 'horse'], inplace=True, keep='last')
                     X_pred_export.to_csv(filename, index=False)
-
+                    logger.info(f'Rodando Modelo: Apostas do {column["name"]} para o dia {date_string} salvas com sucesso!')
                 except Exception as e:
-                    print(e)
+                    logger.warning(e)
 
+            else:
+                logger.warning(f'Pre-race: Não existe base para o dia {date_string}')
