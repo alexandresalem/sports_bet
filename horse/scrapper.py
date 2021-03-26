@@ -434,6 +434,7 @@ def bbc(date_string, table=False, force=False):
                 links.append(f'https://www.bbc.com{link}')
 
         table = False
+        df = None
         for link in links:
             rq = requests.get(link)
             page = rq.content
@@ -456,6 +457,7 @@ def bbc(date_string, table=False, force=False):
 
                 columns = soup('td', re.compile('gs-o-table__cell'))
             except Exception as e:
+
                 logger.warning(f"Apparently the link {link} hasn't loaded properly")
                 logger.warning(e)
                 pass
