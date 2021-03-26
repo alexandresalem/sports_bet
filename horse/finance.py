@@ -62,7 +62,6 @@ def new_daily_bets_result(date_string, days=1):
                     df_bbc.rename(columns={"oddschecker": "odds"}, errors="ignore", inplace=True)
 
                     df_bets = pd.read_csv(bets_filename, parse_dates=['date'])
-
                     df_bets = new_strategy(df_bets)
 
                     if len(df_bets):

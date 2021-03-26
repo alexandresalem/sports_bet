@@ -54,7 +54,7 @@ def send_mail(template,
     message = MIMEMultipart()
     message['Subject'] = subject
     message['From'] = gmail_user
-    message['To'] = ""
+    message['To'] = "me@alexandresalem.com"
     message['Cco'] = ",".join(mail_to)
 
     message.attach(MIMEText(template, "html"))
@@ -327,7 +327,12 @@ def new_strategy(df):
     #     except:
     #         pass
 
-    df = df[df['winner_pred'] == 1]
+    bet_df = df.loc[(df['win_chance'] > 0.5) & (df['betfair_back'] >= 1.2)]
+    non_bet_df = df.loc[df['win_chance'] <= 0.5]
+    non_bet_df = non_bet_df.sort_values(by=['loose_chance'], ignore_index=True)
+
+    new_df = bet_df.append(non_bet_df.loc[:2])
+
     # df = df[df['won_last_race'] == 0]
     # df = df[df['best_position'] > 1]
     # df = df[df['best_position'] < 99]
@@ -338,7 +343,7 @@ def new_strategy(df):
     # # df = df[df['odds'] > 1.00]
     # df = df.drop_duplicates(subset=['date', 'time', 'city'], keep='last')
 
-    return df
+    return new_df
 
 
 def acerto(winner, winner_pred):

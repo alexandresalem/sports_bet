@@ -42,11 +42,6 @@ def mail_results(date_string):
     models = os.path.join(MODELOS_DIR, 'models.csv')
     df_models = pd.read_csv(models)
 
-    if datetime.utcnow().hour < 21:
-        subject = f"Resultado Parcial Apostas {date_string}"
-    else:
-        subject = f"Resultado Final Apostas {date_string}"
-
     for index, column in df_models.iterrows():
 
         if not pd.isnull(column["use"]):
@@ -72,6 +67,18 @@ def mail_results(date_string):
                 df_fin['conservador'] = df_fin['conservador'].astype('float32')
 
                 if len(df):
+                    result = df_fin.loc[0, 'conservador']
+
+                    if result > 0:
+                        title = "Lucro"
+                    else:
+                        title = "Prejuizo"
+
+                    if datetime.utcnow().hour < 21:
+                        subject = f"Parcial Apostas {date_string}: {title} de {round(result, 2)}%"
+                    else:
+                        subject = f"Resultado Final {date_string}: {title} de {round(result, 2)}%"
+
                     env = Environment(loader=FileSystemLoader("/home/alexandresalem/Projects/sportsbet/horse/templates"))
                     tm = env.get_template("mail_results.html")
                     msg = tm.render(results=df, finance=df_fin)
