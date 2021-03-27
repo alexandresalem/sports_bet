@@ -7,4 +7,4 @@ def input_value():
     return input
 
 def test_divisible_by_3(input_value):
-    assert input_value == 39
+    assert input_value * 2 == 78 + 1 - 1

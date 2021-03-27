@@ -30,9 +30,9 @@ if __name__ == "__main__":
 
     elif hour_uk < RACING_HOURS[0]:
 
-        # bbc(yesterday_uk.strftime('%Y.%m.%d'))
-        # post_race_base(yesterday_uk.strftime('%Y.%m.%d'))
-        # new_daily_bets_result(yesterday_uk.strftime("%Y.%m.%d"))
-        # new_monthly_results(yesterday_uk.strftime("%Y.%m.%d"))
+        bbc(yesterday_uk.strftime('%Y.%m.%d'))
+        post_race_base(yesterday_uk.strftime('%Y.%m.%d'))
+        new_daily_bets_result(yesterday_uk.strftime("%Y.%m.%d"))
+        new_monthly_results(yesterday_uk.strftime("%Y.%m.%d"))
 
         mail_results(yesterday_uk.strftime("%Y.%m.%d"))

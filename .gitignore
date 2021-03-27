@@ -4,3 +4,8 @@
 /horse/templates
 /horse/test.py
 /horse/test2.py
+
+.idea
+*__pycache__
+*.log
+/.github/
