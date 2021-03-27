@@ -1,0 +1,43 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <style>
+
+        </style>
+
+    </head>
+    <body class="bg-light">
+        <div class="container">
+            <div class="card my-5">
+                <div class="card-body">
+                    <h4>Palpite sugerido para a corrida que está comecando agora!</h4>
+                    <table style="font-family: Arial, Helvetica, sans-serif; border-collapse: collapse;width: 80%">
+                        <tbody>
+                            <thead>
+                                <tr>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Cidade</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" style="border: 1px solid #ddd; padding: 8px;" class="text-center" scope="col">Horário</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Cavalo</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Chance de Vitória</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Retorno Aposta R$ 100</th>
+                                </tr>
+                            </thead>
+                            {% for i in range(0, results|length) %}
+                                    <tr>
+                                        <th style="border: 1px solid #ddd; padding: 8px;" class="align-middle text-center" scope="row">{{results['city'][i]|capitalize}}</th>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{results['time'][i]}}</td>
+                                        <td style="border: 1px solid #ddd; padding: 8px;" class="align-middle">{{results['horse'][i]|capitalize}}</td>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{(results['win_chance'][i] * 100)|round(2, 'floor')}}</td>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #4CAF50" class="align-middle text-center">{{((results['betfair_back'][i] - 1) * 100)|round(2, 'floor')}}</td>
+                                    </tr>
+
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+    </body>
+</html>

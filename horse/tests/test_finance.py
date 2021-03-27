@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 
@@ -8,3 +10,5 @@ def input_value():
 
 def test_divisible_by_3(input_value):
     assert input_value * 2 == 78 + 1 - 1
+
+    assert datetime.now() < datetime.utcnow()

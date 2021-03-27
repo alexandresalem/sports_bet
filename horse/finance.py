@@ -4,9 +4,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from horse.constants import MODELOS_DIR, BASES_DIR, BBC_DIR, BETS_DIR, \
-    BETS_RESULT_DIR, CONSERVADOR, MEDIANO, AGRESSIVO, FINANCEIRO_DIR
-from horse.scrapper import bbc
-from horse.utils import financial_result, strategy, new_strategy, is_winner
+    BETS_RESULT_DIR, CONSERVADOR, FINANCEIRO_DIR
+from horse.utils import financial_result, new_strategy, is_winner
 
 
 def new_daily_bets_result(date_string, days=1):

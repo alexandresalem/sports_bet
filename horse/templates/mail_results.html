@@ -1,0 +1,89 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <style>
+       /* Add custom classes and styles that you want inlined here */
+    </style>
+  </head>
+  <body class="bg-light">
+        <div class="container">
+            <div class="card my-5">
+                <div class="card-body">
+                    <h4>Resultado do dia: R$ {{((results['conservador'].sum()) * 50.00)|round(2, 'floor')}}</h4>
+                    <table style="font-family: Arial, Helvetica, sans-serif; border-collapse: collapse;width: 80%">
+                        <tbody>
+                            <thead>
+                                <tr>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" style="border: 1px solid #ddd; padding: 8px;" class="text-center" scope="col">Horário</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Cidade</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Cavalo</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Pagando</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Posicao Final</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Retorno Aposta R$ 100</th>
+                                </tr>
+                            </thead>
+                            {% for i in range(0, results|length) %}
+                                    <tr>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{results['time'][i]}}</td>
+                                        <th style="border: 1px solid #ddd; padding: 8px;" class="align-middle text-center" scope="row">{{results['city'][i]|capitalize}}</th>
+                                        <td style="border: 1px solid #ddd; padding: 8px;" class="align-middle">{{results['horse'][i]|capitalize}}</td>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{(results['betfair_back'][i])}}</td>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{(results['finished'][i])}} de {{results['horses_race_x'][i]}} cavalos</td>
+                                        {% if results['conservador'][i] > 0 %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #4CAF50" class="align-middle text-center">R$ {{((results['conservador'][i]) * 50.0001)|round(2, 'floor')}}</td>
+                                        {% else %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #DC143C" class="align-middle text-center">R$ {{((results['conservador'][i]) * 50.000)|round(2, 'floor')}}</td>
+                                        {% endif %}
+                                    </tr>
+
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+            <div class="card my-5">
+                <div class="card-body">
+                    <h4>Resultados dos últimos 7 dias (*):</h4>
+                    <table style="font-family: Arial, Helvetica, sans-serif; border-collapse: collapse;width: 80%">
+                        <tbody>
+                            <thead>
+                                <tr>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Data</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Apostas Feitas</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Apostas Corretas</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Retorno Dia</th>
+                                    <th style="border: 1px solid #ddd; padding: 8px;padding-top: 12px;padding-bottom: 12px;text-align: center;background-color: #4CAF50;color: white;" scope="col">Retorno Acumulado</th>
+                                </tr>
+                            </thead>
+                            {% for i in range(0, 7) %}
+                                    <tr>
+                                        <td style="border: 1px solid #ddd; padding: 8px;text-align: center;" class="align-middle text-center">{{finance['date'][i]}}</td>
+                                        <th style="border: 1px solid #ddd; padding: 8px;" class="align-middle text-center" scope="row">{{finance['num_apostas'][i]}}</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px;" class="align-middle text-center" scope="row">{{finance['acc_apostas'][i]}}</th>
+                                        {% if finance['conservador'][i] > 0 %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #4CAF50;" class="align-middle text-center">{{finance['conservador'][i]}} %</td>
+                                        {% else %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #DC143C;" class="align-middle text-center">{{finance['conservador'][i]}} %</td>
+                                        {% endif %}
+                                        {% if finance['retorno_mes_conservador'][i] - 100 > 0 %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #4CAF50;" class="align-middle text-center">{{(finance['retorno_mes_conservador'][i] - 100)|round(2, 'floor')}} %</td>
+                                        {% else %}
+                                            <td style="border: 1px solid #ddd; padding: 8px;text-align: center;color: #DC143C;" class="align-middle text-center">{{(finance['retorno_mes_conservador'][i] - 100)|round(2, 'floor')}} %</td>
+                                        {% endif %}
+                                    </tr>
+
+                            {% endfor %}
+
+
+                        </tbody>
+
+                    </table>
+                    <p>*Os valores apresentados acima representam os resultados em relacao ao saldo total da conta, para quem aposta 2% do saldo em cada corrida.</p>
+                    <p>Ex: Apostas de R$ 100,00 para um saldo de R$ 5.000,00 em conta.</p>
+                </div>
+
+            </div>
+        </div>
+    </body>
+</html>
