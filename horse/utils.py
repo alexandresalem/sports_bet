@@ -213,13 +213,6 @@ def prepare_dataframe(df, row):
     return df
 
 
-def strategy(result):
-    if result > 10:
-        return result
-    else:
-        return 0
-
-
 def going(going):
     replace_dict = {
         "standard to slow": "standard",
@@ -232,6 +225,7 @@ def going(going):
     }
 
     return replace_dict.get(going, going)
+
 
 def race_type(race, race_type):
     if race.lower() in race_type.lower().split():
@@ -505,7 +499,9 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
         if 'going' not in df:
             df['going'] = 'standard'
 
-        df['going'] = df.apply(lambda x: going(x['going']), axis=1)
+        df_going = pd.DataFrame({"going": df.apply(lambda x: going(x['going']), axis=1)})
+        df = df.drop(columns=['going'])
+        df = df.join(df_going)
 
         df = df[df['betfair_back'] < 999]
 
@@ -538,11 +534,6 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
                 df.loc[index - count + i + 1, 'horses_race'] = count
 
             count = 1
-
-    #     if index % 10000 == 0:
-    #         print(index)
-    #
-    # df.to_csv(os.path.join(BASES_DIR, 'base_bbc_full_v2.csv'), index=False)
 
     if not pre_race:
         # Finished
