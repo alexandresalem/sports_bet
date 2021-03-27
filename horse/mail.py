@@ -73,7 +73,7 @@ def mail_results(date_string):
                         title = "Lucro"
                     else:
                         title = "Prejuizo"
-
+                        round()
                     if datetime.utcnow().hour < 21:
                         subject = f"Parcial Apostas {date_string}: {title} de {round(result, 2)}%"
                     else:

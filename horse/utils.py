@@ -15,7 +15,7 @@ from horse.constants import BASES_DIR, FINANCE_MAIL_LIST, CONSERVADOR
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                     datefmt='%m-%d %H:%M:%S',
-                    filename='horse_race.log',
+                    filename=f'{os.path.expanduser("~")}/horse_race.log',
                     filemode='a+')
 
 # define a Handler which writes INFO messages or higher to the sys.stderr
