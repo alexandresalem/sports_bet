@@ -1,6 +1,7 @@
 import os
 import re
 import statistics
+import threading
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -239,15 +240,6 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         driver.get(BETFAIR_URL)
         sleep(10)
 
-        if racing_hours:
-            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-            try:
-                df = pd.read_csv(filename)
-                table = True
-            except:
-                table = False
-
-
         # Accept Cookies Screen
         try:
             driver.find_elements_by_id('onetrust-accept-btn-handler')[0].click()
@@ -255,13 +247,11 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         except Exception as e:
             pass
 
-
         if next_day_screen:
             driver.find_elements_by_class_name('schedule-filter-button')[1].click()
             sleep(1.5)
         # else:
         #     driver.find_elements_by_class_name('schedule-filter-button')[0].click()
-
 
         country_content = driver.find_elements_by_class_name('country-content')
         meetings = country_content[0].find_elements_by_class_name('meeting-item')
@@ -294,112 +284,148 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         logger.warning(f'Betfair: Consultando {count} corridas')
 
         if count > 0:
+            df_betfair_full = None
             for item in timetable:
                 links = item[2]
+
+                threads = []
                 for link in links:
-                    driver.get(link)
 
-                    sleep(5)
-                    event_info = driver.find_elements_by_class_name('event-info')[0]
+                #     t = threading.Thread(target=scrap_betfair, args=[driver, link, date_string, item])
+                #     t.start()
+                #     threads.append(t)
+                #
+                # for thread in threads:
+                #     thread.join()
+                # threads.clear()
+                    import ipdb
+                    ipdb.set_trace()
+                    df_betfair_race = scrap_betfair(driver=driver,
+                                                    link=link,
+                                                    date_string=date_string,
+                                                    item=item)
 
-                    time = event_info.find_element_by_class_name('venue-name').text.split()[0]
-                    hour = int(time.split(":")[0])
-
-                    hour_us = datetime.now().hour
-                    hour_uk = datetime.utcnow().hour
-
-                    if hour_us > hour_uk:
-                        hour_uk += 24
-
-                    time = (datetime.strptime(time, '%H:%M') + timedelta(hours=hour_uk-hour_us)).strftime('%H:%M')
-
-                    city = event_info.find_element_by_class_name('venue-name').text.split()[1:]
-                    city = " ".join(city).lower()
-
-                    race_type = event_info.find_element_by_class_name('market-name').text
-                    lines = driver.find_elements_by_class_name('runner-line')
-                    horses_race = len(lines)
-                    for line in lines:
-                        try:
-                            horse = line.find_element_by_class_name('runner-name').text
-                        except Exception as e:
-                            horse = ''
-                        try:
-                            jockey = line.find_element_by_class_name('jockey-name').text
-                        except Exception as e:
-                            jockey = ''
-
-                        try:
-                            odds = line.find_elements_by_class_name('mv-bet-button-info')
-                        except Exception as e:
-                            odds = []
-
-                        if odds:
-                            betfair_back = odds[2].find_element_by_css_selector('span').text
-                            betfair_lay = odds[3].find_element_by_css_selector('span').text
-                        else:
-                            betfair_back = 999
-                            betfair_lay = 999
-                            horses_race -= 1
-
-                        timeform_horses = []
-                        horse_timeform = ''
-                        try:
-                            timeform = driver.find_elements_by_class_name('runner-rating-list')[0]
-                            timeform_horses = timeform.find_elements_by_css_selector('li p')
-                        except Exception as e:
-                            logger.warning(f'Timeform não encontrado: {city}: {time}')
-
-                        for i, timeform_horse in enumerate(timeform_horses):
-                            horse_name = timeform_horse.text.split('(')[0].strip().replace("'", "")
-                            if horse == horse_name:
-                                horse_timeform = i + 1
-
-                        if table:
-                            df = df.append({
-                                'date': date_string,
-                                'time': time,
-                                'city': city,
-                                'going': item[1].split('(')[0].strip(),
-                                'horses_race': horses_race,
-                                'horse': horse,
-                                'jockey': jockey,
-                                'betfair_back': betfair_back,
-                                'betfair_lay': betfair_lay,
-                                'race_type': race_type,
-                                'timeform': horse_timeform
-                            }, ignore_index=True)
-                        else:
-                            df = pd.DataFrame({
-                                'date': [date_string],
-                                'time': [time],
-                                'city': [city],
-                                'going': [item[1].split('(')[0].strip()],
-                                'horses_race': [horses_race],
-                                'horse': [horse],
-                                'jockey': [jockey],
-                                'betfair_back': [betfair_back],
-                                'betfair_lay': [betfair_lay],
-                                'race_type': [race_type],
-                                'timeform': [horse_timeform]
-                            })
-                            table = True
                     count -= 1
-                    logger.warning(f'Betfair: Faltam {count} corridas')
+                    print(f'{count} corridas restantes')
 
-            df['horse'] = df['horse'].str.replace("'", "")
+                    if df_betfair_full is not None:
+                        df_betfair_full = df_betfair_full.append(df_betfair_race, ignore_index=True)
+                    else:
+                        df_betfair_full = df_betfair_race
 
-            df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
+                    df_betfair_full['horse'] = df_betfair_full['horse'].str.replace("'", "")
+                    df_betfair_full = df_betfair_full.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
 
             if racing_hours:
                 filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-                df.to_csv(filename, index=False)
+                try:
+                    df = pd.read_csv(filename)
+                    df.append(df_betfair_full, ignore_index=True)
+                except:
+                    df = df_betfair_full
+
             else:
                 filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}_v1.csv')
-                df.to_csv(filename, index=False)
+                df = df_betfair_full
+
+            df.to_csv(filename, index=False)
+
         else:
             logger.warning(f'Betfair: Sem corridas entre {datetime.utcnow().strftime("%H:%M")}'
                             f' e {(datetime.utcnow() + timedelta(minutes=MINUTES_INTERVAL)).strftime("%H:%M")}')
+
+
+def scrap_betfair(driver, link, date_string, item):
+    driver.get(link)
+    sleep(5)
+
+    df = None
+    event_info = driver.find_elements_by_class_name('event-info')[0]
+    time = event_info.find_element_by_class_name('venue-name').text.split()[0]
+    hour = int(time.split(":")[0])
+
+    hour_us = datetime.now().hour
+    hour_uk = datetime.utcnow().hour
+
+    if hour_us > hour_uk:
+        hour_uk += 24
+
+    time = (datetime.strptime(time, '%H:%M') + timedelta(hours=hour_uk - hour_us)).strftime('%H:%M')
+
+    city = event_info.find_element_by_class_name('venue-name').text.split()[1:]
+    city = " ".join(city).lower()
+
+    race_type = event_info.find_element_by_class_name('market-name').text
+    lines = driver.find_elements_by_class_name('runner-line')
+
+    horses_race = len(lines)
+    for i, line in enumerate(lines):
+        try:
+            horse = line.find_element_by_class_name('runner-name').text
+        except Exception as e:
+            horse = ''
+        try:
+            jockey = line.find_element_by_class_name('jockey-name').text
+        except Exception as e:
+            jockey = ''
+
+        try:
+            odds = line.find_elements_by_class_name('mv-bet-button-info')
+        except Exception as e:
+            odds = []
+
+        if odds:
+            betfair_back = odds[2].find_element_by_css_selector('span').text
+            betfair_lay = odds[3].find_element_by_css_selector('span').text
+        else:
+            betfair_back = 999
+            betfair_lay = 999
+            horses_race -= 1
+
+        timeform_horses = []
+        horse_timeform = ''
+        try:
+            timeform = driver.find_elements_by_class_name('runner-rating-list')[0]
+            timeform_horses = timeform.find_elements_by_css_selector('li p')
+        except Exception as e:
+            logger.warning(f'Timeform não encontrado: {city}: {time}')
+
+        for j, timeform_horse in enumerate(timeform_horses):
+            horse_name = timeform_horse.text.split('(')[0].strip().replace("'", "")
+            if horse == horse_name:
+                horse_timeform = j + 1
+
+        if i == 0:
+            df = pd.DataFrame({
+                'date': [date_string],
+                'time': [time],
+                'city': [city],
+                'going': [item[1].split('(')[0].strip()],
+                'horses_race': [horses_race],
+                'horse': [horse],
+                'jockey': [jockey],
+                'betfair_back': [betfair_back],
+                'betfair_lay': [betfair_lay],
+                'race_type': [race_type],
+                'timeform': [horse_timeform]
+            })
+        else:
+            df = df.append({
+                'date': date_string,
+                'time': time,
+                'city': city,
+                'going': item[1].split('(')[0].strip(),
+                'horses_race': horses_race,
+                'horse': horse,
+                'jockey': jockey,
+                'betfair_back': betfair_back,
+                'betfair_lay': betfair_lay,
+                'race_type': race_type,
+                'timeform': horse_timeform
+            }, ignore_index=True)
+
+    return df
+
 
 def bbc(date_string, table=False, force=False):
     df_bbc_full = pd.read_csv(os.path.join(BASES_DIR, 'base_bbc_full.csv'),
