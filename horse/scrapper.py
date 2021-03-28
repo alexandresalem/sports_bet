@@ -238,6 +238,7 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
             driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH, chrome_options=chrome_options)
 
         driver.get(BETFAIR_URL)
+
         sleep(10)
 
         # Accept Cookies Screen
@@ -283,50 +284,58 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         count = sum([len(i[2]) for i in timetable])
         logger.warning(f'Betfair: Consultando {count} corridas')
 
+        df = pd.DataFrame(columns=['date',
+                                   'time',
+                                   'city',
+                                   'going',
+                                   'horses_race',
+                                   'horse',
+                                   'jockey',
+                                   'betfair_back',
+                                   'betfair_lay',
+                                   'race_type',
+                                   'timeform'])
+        if racing_hours:
+            ext = ""
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
+            try:
+                df = df.append(pd.read_csv(filename))
+            except:
+                logger.warning("Criando arquivo Betfair com a primeira corrida do dia")
+        else:
+            ext = "_v1"
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
+
+        if f"{date_string}{ext}" not in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR)):
+            os.mkdir(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}"))
+
         if count > 0:
-            df_betfair_full = None
             for item in timetable:
                 links = item[2]
 
                 threads = []
                 for link in links:
 
-                #     t = threading.Thread(target=scrap_betfair, args=[driver, link, date_string, item])
-                #     t.start()
-                #     threads.append(t)
-                #
-                # for thread in threads:
-                #     thread.join()
-                # threads.clear()
-                    import ipdb
-                    ipdb.set_trace()
-                    df_betfair_race = scrap_betfair(driver=driver,
-                                                    link=link,
-                                                    date_string=date_string,
-                                                    item=item)
+                    t = threading.Thread(target=scrap_betfair, args=(link, df, date_string, item, ext, ))
+                    t.start()
+                    threads.append(t)
 
-                    count -= 1
-                    print(f'{count} corridas restantes')
+                for thread in threads:
+                    thread.join()
 
-                    if df_betfair_full is not None:
-                        df_betfair_full = df_betfair_full.append(df_betfair_race, ignore_index=True)
-                    else:
-                        df_betfair_full = df_betfair_race
+                count -= len(threads)
+                logger.info(f'Betfair: Faltam {count} corridas')
 
-                    df_betfair_full['horse'] = df_betfair_full['horse'].str.replace("'", "")
-                    df_betfair_full = df_betfair_full.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
+                threads.clear()
 
-            if racing_hours:
-                filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-                try:
-                    df = pd.read_csv(filename)
-                    df.append(df_betfair_full, ignore_index=True)
-                except:
-                    df = df_betfair_full
-
-            else:
-                filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}_v1.csv')
-                df = df_betfair_full
+            df = pd.concat([pd.read_csv(os.path.join(BASES_DIR,
+                                                     BETFAIR_DIR,
+                                                     f'{date_string}{ext}',
+                                                     file), parse_dates=['date']) for file in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}"))],
+                                           axis=0,
+                                           join='inner').sort_values(by=['date', 'city', 'time'])
+            df['horse'] = df['horse'].str.replace("'", "")
+            df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
 
             df.to_csv(filename, index=False)
 
@@ -335,11 +344,17 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
                             f' e {(datetime.utcnow() + timedelta(minutes=MINUTES_INTERVAL)).strftime("%H:%M")}')
 
 
-def scrap_betfair(driver, link, date_string, item):
-    driver.get(link)
-    sleep(5)
+def scrap_betfair(link, df, date_string, item, ext):
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    caps = DesiredCapabilities().CHROME
+    caps["pageLoadStrategy"] = "normal"  # Waits for full page load
+    # caps["pageLoadStrategy"] = "none"
+    driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH, chrome_options=chrome_options)
 
-    df = None
+    driver.get(link)
+    sleep(15)
+
     event_info = driver.find_elements_by_class_name('event-info')[0]
     time = event_info.find_element_by_class_name('venue-name').text.split()[0]
     hour = int(time.split(":")[0])
@@ -395,36 +410,23 @@ def scrap_betfair(driver, link, date_string, item):
             if horse == horse_name:
                 horse_timeform = j + 1
 
-        if i == 0:
-            df = pd.DataFrame({
-                'date': [date_string],
-                'time': [time],
-                'city': [city],
-                'going': [item[1].split('(')[0].strip()],
-                'horses_race': [horses_race],
-                'horse': [horse],
-                'jockey': [jockey],
-                'betfair_back': [betfair_back],
-                'betfair_lay': [betfair_lay],
-                'race_type': [race_type],
-                'timeform': [horse_timeform]
-            })
-        else:
-            df = df.append({
-                'date': date_string,
-                'time': time,
-                'city': city,
-                'going': item[1].split('(')[0].strip(),
-                'horses_race': horses_race,
-                'horse': horse,
-                'jockey': jockey,
-                'betfair_back': betfair_back,
-                'betfair_lay': betfair_lay,
-                'race_type': race_type,
-                'timeform': horse_timeform
-            }, ignore_index=True)
+        df = df.append({
+            'date': date_string,
+            'time': time,
+            'city': city,
+            'going': item[1].split('(')[0].strip(),
+            'horses_race': horses_race,
+            'horse': horse,
+            'jockey': jockey,
+            'betfair_back': betfair_back,
+            'betfair_lay': betfair_lay,
+            'race_type': race_type,
+            'timeform': horse_timeform
+        }, ignore_index=True)
 
-    return df
+    df.to_csv(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}", f"betfair_{city}_{time}.csv"), index=False)
+
+    driver.close()
 
 
 def bbc(date_string, table=False, force=False):
