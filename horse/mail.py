@@ -3,7 +3,8 @@ import pandas as pd
 from datetime import datetime
 
 from jinja2 import Template, Environment, FileSystemLoader
-from horse.constants import MODELOS_DIR, BASES_DIR, BETS_DIR, BETS_RESULT_DIR, FINANCEIRO_DIR
+from horse.constants import MODELOS_DIR, BASES_DIR, BETS_DIR, BETS_RESULT_DIR, FINANCEIRO_DIR, FINANCE_MAIL_LIST, \
+    RACING_HOURS
 from horse.utils import send_mail, logger
 
 
@@ -71,19 +72,23 @@ def mail_results(date_string):
 
                     if result > 0:
                         title = "Lucro"
+                        perc = str(round(result, 2))[:4]
                     else:
                         title = "Prejuizo"
+                        perc = str(round(result, 2))[:5]
 
-                    if datetime.utcnow().hour < 21:
-                        subject = f"Parcial Apostas {date_string}: {title} de {round(result, 2)}%"
+                    if datetime.utcnow().hour in RACING_HOURS:
+                        subject = f"Parcial Apostas {date_string}: {title} de {perc}%"
                     else:
-                        subject = f"Resultado Final {date_string}: {title} de {round(result, 2)}%"
+                        subject = f"Resultado Final {date_string}: {title} de {perc}%"
 
                     env = Environment(loader=FileSystemLoader("/home/alexandresalem/Projects/sportsbet/horse/templates"))
                     tm = env.get_template("mail_results.html")
                     msg = tm.render(results=df, finance=df_fin)
                     logger.warning('Enviando email resultados')
-                    send_mail(msg, subject=subject)
+
+                    for recipient in FINANCE_MAIL_LIST:
+                        send_mail(msg, subject=subject, mail_to=recipient)
 
             except Exception as e:
 

@@ -37,9 +37,9 @@ MEDIANO = 4
 AGRESSIVO = 8
 
 MINUTES_INTERVAL = 2
-RACING_HOURS = range(7, 22)
+RACING_HOURS = range(6, 21)
 
 # MAILING LIST
 # FINANCE_MAIL_LIST = []
-FINANCE_MAIL_LIST = ['timigoandroid@gmail.com', 'rlouroa@hotmail.com']
+FINANCE_MAIL_LIST = ['timigoandroid@gmail.com', 'rlouroa@hotmail.com', 'me@alexandresalem.com']
 
