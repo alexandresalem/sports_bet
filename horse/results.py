@@ -26,8 +26,6 @@ if __name__ == "__main__":
 
         mail_results(date_uk.strftime("%Y.%m.%d"))
 
-
-
     elif hour_uk < RACING_HOURS[0]:
 
         bbc(yesterday_uk.strftime('%Y.%m.%d'))
