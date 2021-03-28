@@ -18,8 +18,8 @@ def pre_race_base(date_string, racing_hours=False):
     betfair_filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
 
     try:
-        df_oddschecker = pd.read_csv(oddschecker_filename, parse_dates=['date'])
-        df_betfair = pd.read_csv(betfair_filename, parse_dates=['date'])
+        df_oddschecker = pd.read_csv(oddschecker_filename, parse_dates=['date', 'time'])
+        df_betfair = pd.read_csv(betfair_filename, parse_dates=['date', 'time'])
 
         df_join = pd.merge(df_betfair,
                            df_oddschecker,
@@ -27,11 +27,21 @@ def pre_race_base(date_string, racing_hours=False):
                            on=['date', 'time', 'city', 'horse'],
                            suffixes=('_betfair', '_oddschecker'))
 
-        df_join.sort_values(by=['time', 'oddschecker'], ignore_index=True, inplace=True)
+        if df_join['oddschecker'].isnull().sum() == len(df_join):
+            df_betfair['time'] = df_betfair['time'] + pd.Timedelta(hours=1)
+            df_join = pd.merge(df_betfair,
+                               df_oddschecker,
+                               how='left',
+                               on=['date', 'time', 'city', 'horse'],
+                               suffixes=('_betfair', '_oddschecker'))
+
+        df_join['time'] = df_join['time'].dt.strftime("%H:%M")
 
         df_join.rename(columns={"oddschecker": "odds", "horses_race_betfair": "horses_race"},
                        errors="ignore",
                        inplace=True)
+
+        df_join.sort_values(by=['time', 'odds'], ignore_index=True, inplace=True)
 
         historical_filename = os.path.join(BASES_DIR, f'base_bbc_full.csv')
         df_history = pd.read_csv(historical_filename, low_memory=False, parse_dates=['date'])
