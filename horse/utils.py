@@ -42,8 +42,8 @@ def race_category(title, category):
 
 
 def send_mail(template,
-              attached_files=[],
-              mail_to=FINANCE_MAIL_LIST,
+              mail_to,
+              attached_files=None,
               subject='Horse Race',
               ):
 
@@ -54,20 +54,20 @@ def send_mail(template,
     message = MIMEMultipart()
     message['Subject'] = subject
     message['From'] = gmail_user
-    message['To'] = "me@alexandresalem.com"
-    message['Cco'] = ",".join(mail_to)
+    message['To'] = mail_to
 
     message.attach(MIMEText(template, "html"))
 
     part = MIMEBase('application', "octet-stream")
 
     #    I have a CSV file named `attachthisfile.csv` in the same directory that I'd like to attach an
-    for file in attached_files:
-        part.set_payload(open(f"{file}", "rb").read())
-        encoders.encode_base64(part)
-        filename = os.path.basename(file)
-        part.add_header('Content-Disposition', 'attachment', filename=f'{filename}')
-        message.attach(part)
+    if attached_files:
+        for file in attached_files:
+            part.set_payload(open(f"{file}", "rb").read())
+            encoders.encode_base64(part)
+            filename = os.path.basename(file)
+            part.add_header('Content-Disposition', 'attachment', filename=f'{filename}')
+            message.attach(part)
 
     msgBody = message.as_string()
 

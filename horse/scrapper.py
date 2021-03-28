@@ -332,7 +332,7 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
                         try:
                             odds = line.find_elements_by_class_name('mv-bet-button-info')
                         except Exception as e:
-                            odds=[]
+                            odds = []
 
                         if odds:
                             betfair_back = odds[2].find_element_by_css_selector('span').text
