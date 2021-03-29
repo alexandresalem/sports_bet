@@ -1,6 +1,7 @@
 import os
 import re
 import statistics
+import threading
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -39,17 +40,6 @@ def oddschecker(date_string, next_day_screen, table=False, racing_hours=False):
             sleep(0.5)
         except:
             pass
-
-
-        # Opening Oddschecker File
-        if racing_hours:
-            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
-            try:
-                df = pd.read_csv(filename)
-                table = True
-            except:
-                table = False
-
 
         # Tomorrow's schedule
         if next_day_screen:
@@ -103,110 +93,59 @@ def oddschecker(date_string, next_day_screen, table=False, racing_hours=False):
         # Extracting Odds of each race
         logger.warning(f'Oddschecker: Consultando {len(links)} corridas')
 
+        df = pd.DataFrame(columns=['date',
+                                   'time',
+                                   'city',
+                                   'horse',
+                                   'started',
+                                   'oddschecker',
+                                   'odd_list'])
+        if racing_hours:
+            ext = ""
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}{ext}.csv')
+            try:
+                df = df.append(pd.read_csv(filename))
+            except:
+                logger.warning("Criando arquivo Oddschecker com a primeira corrida do dia")
+        else:
+            ext = "_v1"
+            filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}{ext}.csv')
+
+        if f"{date_string}{ext}" not in os.listdir(os.path.join(BASES_DIR, ODDSCHECKER_DIR)):
+            os.mkdir(os.path.join(BASES_DIR, ODDSCHECKER_DIR, f"{date_string}{ext}"))
+
         if len(links):
             count = len(links)
+            threads = []
             for link in links:
+                t = threading.Thread(target=scrap_oddschecker, args=(link, df, date_string, ext,))
+                t.start()
+                threads.append(t)
+                if len(threads) == 10:
+                    for thread in threads:
+                        thread.join()
+                    threads.clear()
+                    count -= 10
+                    logger.info(f'Oddschecker: Faltam {count} corridas')
 
-                # Selenium opening page
-                driver.get(link)
-                sleep(1.5)
+            for thread in threads:
+                thread.join()
+                count -= len(threads)
+                logger.info(f'Oddschecker: Faltam {count} corridas')
 
-                # Skipping Ads
-                try:
-                    ad = driver.find_elements_by_class_name('choose-uk')
-                    ad[0].click()
-                    sleep(0.5)
-                except:
-                    pass
-                try:
-                    ad = driver.find_elements_by_class_name('webpush-swal2-close')
-                    ad[0].click()
-                    sleep(0.5)
-                except:
-                    pass
-                try:
-                    ad = driver.find_elements_by_class_name('js-close-class')
-                    ad[0].click()
-                    sleep(0.5)
-                except:
-                    pass
+            threads.clear()
 
-                city = link.split('/')[-3]
-                if str(city).startswith('2021'):
-                    city = " ".join(city.split('-')[3:])
-                else:
-                    city = city.replace('-', ' ')
-
-                time = link.split('/')[-2]
-
-                lines = driver.find_elements_by_class_name('diff-row')
-                horses_race = len(lines)
-                non_runners = 0
-                for i, line in enumerate(lines):
-                    started = i + 1
-
-                    # Selenium
-                    horse = line.find_element_by_css_selector('a').text.strip().replace("'", "")
-                    if len(horse.split("(")) > 1:
-                        horse = horse.split("(")[0].strip()
-                    odd_columns = line.find_elements_by_css_selector('td')[2:]
-
-                    odd_list = []
-                    for odd_column in odd_columns:
-                        odd_text = odd_column.text.split('/')
-                        # Se for fracao
-                        if len(odd_text) == 2:
-                            try:
-                                odd = round(int(odd_text[0]) / int(odd_text[1]), 2)
-                                odd_list.append(odd)
-                            except Exception as e:
-                                pass
-
-                        # Se for numero inteiro
-                        elif len(odd_text) == 1:
-                            try:
-                                odd = int(odd_text[0])
-                                odd_list.append(odd)
-                            except Exception as e:
-                                pass
-
-                    if non_runners > 0:
-                        started -= 1
-
-                    if odd_list:
-                        odd_mean = round(statistics.mean(odd_list), 2)
-                    else:
-                        odd_mean = ""
-                        started = horses_race - non_runners
-                        non_runners += 1
-                        pass
-
-                    if table:
-                        df = df.append({
-                            'date': date_string,
-                            'time': time,
-                            'city': city,
-                            'horse': horse,
-                            'started': started,
-                            'oddschecker': odd_mean,
-                            'odd_list': odd_list
-                        }, ignore_index=True)
-                    else:
-                        df = pd.DataFrame({
-                            'date': [date_string],
-                            'time': [time],
-                            'city': [city],
-                            'horse': [horse],
-                            'started': [started],
-                            'oddschecker': [odd_mean],
-                            'odd_list': [odd_list]
-                        })
-                        table = True
-
-                count -= 1
-                logger.warning(f'Oddschecker: Faltam {count} corridas')
+            df = pd.concat([pd.read_csv(os.path.join(BASES_DIR,
+                                                     ODDSCHECKER_DIR,
+                                                     f'{date_string}{ext}',
+                                                     file), parse_dates=['date']) for file in
+                            os.listdir(os.path.join(BASES_DIR, ODDSCHECKER_DIR, f"{date_string}{ext}"))],
+                           axis=0,
+                           join='inner').sort_values(by=['date', 'city', 'time'])
 
             df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse'], keep='last')
+
+            df.to_csv(filename, index=False)
 
             if racing_hours:
                 filename = os.path.join(BASES_DIR, ODDSCHECKER_DIR, f'base_oddschecker_{date_string}.csv')
@@ -237,16 +176,8 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
             driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH, chrome_options=chrome_options)
 
         driver.get(BETFAIR_URL)
+
         sleep(10)
-
-        if racing_hours:
-            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-            try:
-                df = pd.read_csv(filename)
-                table = True
-            except:
-                table = False
-
 
         # Accept Cookies Screen
         try:
@@ -255,13 +186,11 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         except Exception as e:
             pass
 
-
         if next_day_screen:
             driver.find_elements_by_class_name('schedule-filter-button')[1].click()
             sleep(1.5)
         # else:
         #     driver.find_elements_by_class_name('schedule-filter-button')[0].click()
-
 
         country_content = driver.find_elements_by_class_name('country-content')
         meetings = country_content[0].find_elements_by_class_name('meeting-item')
@@ -293,113 +222,248 @@ def betfair(date_string, next_day_screen, table=False, racing_hours=False, drive
         count = sum([len(i[2]) for i in timetable])
         logger.warning(f'Betfair: Consultando {count} corridas')
 
+        df = pd.DataFrame(columns=['date',
+                                   'time',
+                                   'city',
+                                   'going',
+                                   'horses_race',
+                                   'horse',
+                                   'jockey',
+                                   'betfair_back',
+                                   'betfair_lay',
+                                   'race_type',
+                                   'timeform'])
+        if racing_hours:
+            ext = ""
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
+            try:
+                df = df.append(pd.read_csv(filename))
+            except:
+                logger.warning("Criando arquivo Betfair com a primeira corrida do dia")
+        else:
+            ext = "_v1"
+            filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}{ext}.csv')
+
+        if f"{date_string}{ext}" not in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR)):
+            os.mkdir(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}"))
+
         if count > 0:
             for item in timetable:
                 links = item[2]
+
+                threads = []
                 for link in links:
-                    driver.get(link)
 
-                    sleep(5)
-                    event_info = driver.find_elements_by_class_name('event-info')[0]
+                    t = threading.Thread(target=scrap_betfair, args=(link, df, date_string, item, ext, ))
+                    t.start()
+                    threads.append(t)
 
-                    time = event_info.find_element_by_class_name('venue-name').text.split()[0]
-                    hour = int(time.split(":")[0])
+                for thread in threads:
+                    thread.join()
 
-                    hour_us = datetime.now().hour
-                    hour_uk = datetime.utcnow().hour
+                count -= len(threads)
+                logger.info(f'Betfair: Faltam {count} corridas')
 
-                    if hour_us > hour_uk:
-                        hour_uk += 24
+                threads.clear()
 
-                    time = (datetime.strptime(time, '%H:%M') + timedelta(hours=hour_uk-hour_us)).strftime('%H:%M')
-
-                    city = event_info.find_element_by_class_name('venue-name').text.split()[1:]
-                    city = " ".join(city).lower()
-
-                    race_type = event_info.find_element_by_class_name('market-name').text
-                    lines = driver.find_elements_by_class_name('runner-line')
-                    horses_race = len(lines)
-                    for line in lines:
-                        try:
-                            horse = line.find_element_by_class_name('runner-name').text
-                        except Exception as e:
-                            horse = ''
-                        try:
-                            jockey = line.find_element_by_class_name('jockey-name').text
-                        except Exception as e:
-                            jockey = ''
-
-                        try:
-                            odds = line.find_elements_by_class_name('mv-bet-button-info')
-                        except Exception as e:
-                            odds = []
-
-                        if odds:
-                            betfair_back = odds[2].find_element_by_css_selector('span').text
-                            betfair_lay = odds[3].find_element_by_css_selector('span').text
-                        else:
-                            betfair_back = 999
-                            betfair_lay = 999
-                            horses_race -= 1
-
-                        timeform_horses = []
-                        horse_timeform = ''
-                        try:
-                            timeform = driver.find_elements_by_class_name('runner-rating-list')[0]
-                            timeform_horses = timeform.find_elements_by_css_selector('li p')
-                        except Exception as e:
-                            logger.warning(f'Timeform não encontrado: {city}: {time}')
-
-                        for i, timeform_horse in enumerate(timeform_horses):
-                            horse_name = timeform_horse.text.split('(')[0].strip().replace("'", "")
-                            if horse == horse_name:
-                                horse_timeform = i + 1
-
-                        if table:
-                            df = df.append({
-                                'date': date_string,
-                                'time': time,
-                                'city': city,
-                                'going': item[1].split('(')[0].strip(),
-                                'horses_race': horses_race,
-                                'horse': horse,
-                                'jockey': jockey,
-                                'betfair_back': betfair_back,
-                                'betfair_lay': betfair_lay,
-                                'race_type': race_type,
-                                'timeform': horse_timeform
-                            }, ignore_index=True)
-                        else:
-                            df = pd.DataFrame({
-                                'date': [date_string],
-                                'time': [time],
-                                'city': [city],
-                                'going': [item[1].split('(')[0].strip()],
-                                'horses_race': [horses_race],
-                                'horse': [horse],
-                                'jockey': [jockey],
-                                'betfair_back': [betfair_back],
-                                'betfair_lay': [betfair_lay],
-                                'race_type': [race_type],
-                                'timeform': [horse_timeform]
-                            })
-                            table = True
-                    count -= 1
-                    logger.warning(f'Betfair: Faltam {count} corridas')
-
+            df = pd.concat([pd.read_csv(os.path.join(BASES_DIR,
+                                                     BETFAIR_DIR,
+                                                     f'{date_string}{ext}',
+                                                     file), parse_dates=['date']) for file in os.listdir(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}"))],
+                                           axis=0,
+                                           join='inner').sort_values(by=['date', 'city', 'time'])
             df['horse'] = df['horse'].str.replace("'", "")
-
             df = df.drop_duplicates(subset=['date', 'time', 'city', 'horse', 'horses_race'], keep='last')
 
-            if racing_hours:
-                filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}.csv')
-                df.to_csv(filename, index=False)
-            else:
-                filename = os.path.join(BASES_DIR, BETFAIR_DIR, f'base_betfair_{date_string}_v1.csv')
-                df.to_csv(filename, index=False)
+            df.to_csv(filename, index=False)
+
         else:
             logger.warning(f'Betfair: Sem corridas entre {datetime.utcnow().strftime("%H:%M")}'
                             f' e {(datetime.utcnow() + timedelta(minutes=MINUTES_INTERVAL)).strftime("%H:%M")}')
+
+
+def scrap_oddschecker(link, df, date_string, ext):
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    caps = DesiredCapabilities().CHROME
+    caps["pageLoadStrategy"] = "normal"  # Waits for full page load
+    # caps["pageLoadStrategy"] = "none"
+    driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH, chrome_options=chrome_options)
+
+    # Selenium opening page
+    driver.get(link)
+    sleep(1.5)
+
+    # Skipping Ads
+    try:
+        ad = driver.find_elements_by_class_name('choose-uk')
+        ad[0].click()
+        sleep(0.5)
+    except:
+        pass
+    try:
+        ad = driver.find_elements_by_class_name('webpush-swal2-close')
+        ad[0].click()
+        sleep(0.5)
+    except:
+        pass
+    try:
+        ad = driver.find_elements_by_class_name('js-close-class')
+        ad[0].click()
+        sleep(0.5)
+    except:
+        pass
+
+    city = link.split('/')[-3]
+    if str(city).startswith('2021'):
+        city = " ".join(city.split('-')[3:])
+    else:
+        city = city.replace('-', ' ')
+
+    time = link.split('/')[-2]
+
+    lines = driver.find_elements_by_class_name('diff-row')
+    horses_race = len(lines)
+    non_runners = 0
+    for i, line in enumerate(lines):
+        started = i + 1
+
+        # Selenium
+        horse = line.find_element_by_css_selector('a').text.strip().replace("'", "")
+        if len(horse.split("(")) > 1:
+            horse = horse.split("(")[0].strip()
+        odd_columns = line.find_elements_by_css_selector('td')[2:]
+
+        odd_list = []
+        for odd_column in odd_columns:
+            odd_text = odd_column.text.split('/')
+            # Se for fracao
+            if len(odd_text) == 2:
+                try:
+                    odd = round(int(odd_text[0]) / int(odd_text[1]), 2)
+                    odd_list.append(odd)
+                except Exception as e:
+                    pass
+
+            # Se for numero inteiro
+            elif len(odd_text) == 1:
+                try:
+                    odd = int(odd_text[0])
+                    odd_list.append(odd)
+                except Exception as e:
+                    pass
+
+        if non_runners > 0:
+            started -= 1
+
+        if odd_list:
+            odd_mean = round(statistics.mean(odd_list), 2)
+        else:
+            odd_mean = ""
+            started = horses_race - non_runners
+            non_runners += 1
+            pass
+
+        df = df.append({
+            'date': date_string,
+            'time': time,
+            'city': city,
+            'horse': horse,
+            'started': started,
+            'oddschecker': odd_mean,
+            'odd_list': odd_list
+        }, ignore_index=True)
+
+    df.to_csv(os.path.join(BASES_DIR, ODDSCHECKER_DIR, f"{date_string}{ext}", f"oddschecker_{city}_{time}.csv"),
+              index=False)
+
+    driver.close()
+
+
+def scrap_betfair(link, df, date_string, item, ext):
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    caps = DesiredCapabilities().CHROME
+    caps["pageLoadStrategy"] = "normal"  # Waits for full page load
+    # caps["pageLoadStrategy"] = "none"
+    driver = webdriver.Chrome(desired_capabilities=caps, executable_path=WEBDRIVER_PATH, chrome_options=chrome_options)
+
+    driver.get(link)
+    sleep(15)
+
+    event_info = driver.find_elements_by_class_name('event-info')[0]
+    time = event_info.find_element_by_class_name('venue-name').text.split()[0]
+    hour = int(time.split(":")[0])
+
+    hour_us = datetime.now().hour
+    hour_uk = datetime.utcnow().hour
+
+    if hour_us > hour_uk:
+        hour_uk += 24
+
+    time = (datetime.strptime(time, '%H:%M') + timedelta(hours=hour_uk - hour_us)).strftime('%H:%M')
+
+    city = event_info.find_element_by_class_name('venue-name').text.split()[1:]
+    city = " ".join(city).lower()
+
+    race_type = event_info.find_element_by_class_name('market-name').text
+    lines = driver.find_elements_by_class_name('runner-line')
+
+    horses_race = len(lines)
+    for i, line in enumerate(lines):
+        try:
+            horse = line.find_element_by_class_name('runner-name').text
+        except Exception as e:
+            horse = ''
+        try:
+            jockey = line.find_element_by_class_name('jockey-name').text
+        except Exception as e:
+            jockey = ''
+
+        try:
+            odds = line.find_elements_by_class_name('mv-bet-button-info')
+        except Exception as e:
+            odds = []
+
+        if odds:
+            betfair_back = odds[2].find_element_by_css_selector('span').text
+            betfair_lay = odds[3].find_element_by_css_selector('span').text
+        else:
+            betfair_back = 999
+            betfair_lay = 999
+            horses_race -= 1
+
+        timeform_horses = []
+        horse_timeform = ''
+        try:
+            timeform = driver.find_elements_by_class_name('runner-rating-list')[0]
+            timeform_horses = timeform.find_elements_by_css_selector('li p')
+        except Exception as e:
+            logger.warning(f'Timeform não encontrado: {city}: {time}')
+
+        for j, timeform_horse in enumerate(timeform_horses):
+            horse_name = timeform_horse.text.split('(')[0].strip().replace("'", "")
+            if horse == horse_name:
+                horse_timeform = j + 1
+
+        df = df.append({
+            'date': date_string,
+            'time': time,
+            'city': city,
+            'going': item[1].split('(')[0].strip(),
+            'horses_race': horses_race,
+            'horse': horse,
+            'jockey': jockey,
+            'betfair_back': betfair_back,
+            'betfair_lay': betfair_lay,
+            'race_type': race_type,
+            'timeform': horse_timeform
+        }, ignore_index=True)
+
+    df.to_csv(os.path.join(BASES_DIR, BETFAIR_DIR, f"{date_string}{ext}", f"betfair_{city}_{time}.csv"), index=False)
+
+    driver.close()
+
 
 def bbc(date_string, table=False, force=False):
     df_bbc_full = pd.read_csv(os.path.join(BASES_DIR, 'base_bbc_full.csv'),
