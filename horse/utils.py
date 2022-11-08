@@ -1,7 +1,7 @@
 import logging
 import os
 import smtplib
-from datetime import timedelta
+from datetime import datetime, timedelta
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -10,12 +10,11 @@ from email.mime.text import MIMEText
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
-from horse.constants import BASES_DIR, FINANCE_MAIL_LIST, CONSERVADOR
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                     datefmt='%m-%d %H:%M:%S',
-                    filename=f'{os.path.expanduser("~")}/horse_race.log',
+                    filename=r'C:\Users\Alexandre\Projects\sports_bet\horse\horse_log.txt',
                     filemode='a+')
 
 # define a Handler which writes INFO messages or higher to the sys.stderr
@@ -33,8 +32,6 @@ logging.getLogger().addHandler(console)
 logger = logging.getLogger()
 
 
-
-
 def race_category(title, category):
     if category in title.lower():
         return 1
@@ -47,14 +44,14 @@ def send_mail(template,
               subject='Horse Race',
               ):
 
-    with open('/home/alexandresalem/mail_info', 'r') as file:
+    with open(r'C:\Users\Alexandre\ale.txt', 'r') as file:
         text = file.read()
     gmail_user = text.split(':')[0]
     gmail_password = text.split(':')[1].replace('\n', '')
     message = MIMEMultipart()
     message['Subject'] = subject
     message['From'] = gmail_user
-    message['To'] = mail_to
+    message['To'] = mail_to[0]
 
     message.attach(MIMEText(template, "html"))
 
@@ -66,7 +63,8 @@ def send_mail(template,
             part.set_payload(open(f"{file}", "rb").read())
             encoders.encode_base64(part)
             filename = os.path.basename(file)
-            part.add_header('Content-Disposition', 'attachment', filename=f'{filename}')
+            part.add_header('Content-Disposition',
+                            'attachment', filename=f'{filename}')
             message.attach(part)
 
     msgBody = message.as_string()
@@ -74,15 +72,16 @@ def send_mail(template,
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(gmail_user, gmail_password)
+
     server.sendmail(gmail_user, mail_to, msgBody)
     server.quit()
 
 
-def financial_result(bet, back, finished, started=1):
+def financial_result(bet, odd, finished, started=1):
 
     try:
         if int(finished) == 1:
-            return round(bet/started * (back - 1), 2)
+            return round(bet/started * odd, 2)
         else:
             return round((-1) * bet/started, 2)
     except:
@@ -97,7 +96,7 @@ def financial_result_model(bet, back, winner, winner_pred):
     try:
         if winner_pred == 1:
             if winner == 1:
-                return round(bet * (back - 1), 2)
+                return round(bet * back, 2)
             else:
                 return round((-1) * bet, 2)
         else:
@@ -176,36 +175,46 @@ def raw_distance(race_type):
 def prepare_dataframe(df, row):
 
     df['date'] = pd.to_datetime(df['date'], format='%Y.%m.%d')
-    df['weekday'] = pd.to_datetime(df['date']).dt.weekday  # Extracting Weekday from each Date
+    # Extracting Weekday from each Date
+    df['weekday'] = pd.to_datetime(df['date']).dt.weekday
     df = df.dropna(subset=['race_type'])
     df['raw_type'] = df.apply(lambda x: raw_type(x['race_type']), axis=1)
-    df['raw_distance'] = df.apply(lambda x: raw_distance(x['race_type']), axis=1)
-    df['distance'] = df.apply(lambda x: distance_in_yards(x['raw_distance']), axis=1)
+    df['raw_distance'] = df.apply(
+        lambda x: raw_distance(x['race_type']), axis=1)
+    df['distance'] = df.apply(
+        lambda x: distance_in_yards(x['raw_distance']), axis=1)
 
     for i in range(1, 6):
         df[f'race-{i}'] = pd.to_numeric(df[f'race-{i}'], errors='coerce')
         df[f'adv1-{i}'] = pd.to_numeric(df[f'adv1-{i}'], errors='coerce')
         df[f'adv2-{i}'] = pd.to_numeric(df[f'adv2-{i}'], errors='coerce')
 
-    df['timeform'] = df['timeform'].fillna(row['timeform'])  # Assigning '4' to empty TimeForms
+    df['timeform'] = df['timeform'].fillna(
+        row['timeform'])  # Assigning '4' to empty TimeForms
 
     df = df.dropna(subset=['oddschecker'])
     df = df.dropna(subset=['betfair_back'])
 
-    df = df[df['started'] <= row['start_filter']]  # Filtering only favourite horse of each race
+    # Filtering only favourite horse of each race
+    df = df[df['started'] <= row['start_filter']]
 
-    df['best_position'] = df[['race-1', 'race-2', 'race-3', 'race-4', 'race-5']].min(axis=1)
+    df['best_position'] = df[['race-1', 'race-2',
+                              'race-3', 'race-4', 'race-5']].min(axis=1)
     df['best_position'].fillna(20, inplace=True)
 
-    df['best_position_adv1'] = df[['adv1-1', 'adv1-2', 'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
+    df['best_position_adv1'] = df[['adv1-1', 'adv1-2',
+                                   'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
     df['best_position_adv1'].fillna(20, inplace=True)
 
-    df['best_position_adv2'] = df[['adv2-1', 'adv2-2', 'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
+    df['best_position_adv2'] = df[['adv2-1', 'adv2-2',
+                                   'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
     df['best_position_adv2'].fillna(20, inplace=True)
 
     df['won_last_race'] = df.apply(lambda x: is_winner(x['race-1']), axis=1)
-    df['won_last_race_adv1'] = df.apply(lambda x: is_winner(x['adv1-1']), axis=1)
-    df['won_last_race_adv2'] = df.apply(lambda x: is_winner(x['adv2-1']), axis=1)
+    df['won_last_race_adv1'] = df.apply(
+        lambda x: is_winner(x['adv1-1']), axis=1)
+    df['won_last_race_adv2'] = df.apply(
+        lambda x: is_winner(x['adv2-1']), axis=1)
 
     # df['betfair_lay'] = df['betfair_lay'].fillna(1000)
     # df['city'] = LabelEncoder().fit_transform(df['city'])
@@ -236,23 +245,30 @@ def race_type(race, race_type):
 
 def prepare_new_dataset(df):
     # Preparing features
-    df['weekday'] = pd.to_datetime(df['date']).dt.weekday  # Extracting Weekday from each Date
+    # Extracting Weekday from each Date
+    df['weekday'] = pd.to_datetime(df['date']).dt.weekday
 
-    df = df.dropna(subset=['race_type']).sort_values(by=['date', 'time', 'city', 'started'], ignore_index=True)
+    df = df.dropna(subset=['race_type']).sort_values(
+        by=['date', 'time', 'city', 'started'], ignore_index=True)
     df['raw_type'] = df.apply(lambda x: raw_type(x['race_type']), axis=1)
-    df['raw_distance'] = df.apply(lambda x: raw_distance(x['race_type']), axis=1)
+    df['raw_distance'] = df.apply(
+        lambda x: raw_distance(x['race_type']), axis=1)
     df['maiden'] = df.apply(lambda x: race_type('mdn', x['race_type']), axis=1)
-    df['handicap'] = df.apply(lambda x: race_type('hcap', x['race_type']), axis=1)
-    df['stakes'] = df.apply(lambda x: race_type('stks', x['race_type']), axis=1)
+    df['handicap'] = df.apply(
+        lambda x: race_type('hcap', x['race_type']), axis=1)
+    df['stakes'] = df.apply(lambda x: race_type(
+        'stks', x['race_type']), axis=1)
 
-    df['distance'] = df.apply(lambda x: distance_in_yards(x['raw_distance']), axis=1)
+    df['distance'] = df.apply(
+        lambda x: distance_in_yards(x['raw_distance']), axis=1)
 
     for i in range(1, 6):
         df[f'race-{i}'] = pd.to_numeric(df[f'race-{i}'], errors='coerce')
         df[f'adv1-{i}'] = pd.to_numeric(df[f'adv1-{i}'], errors='coerce')
         df[f'adv2-{i}'] = pd.to_numeric(df[f'adv2-{i}'], errors='coerce')
 
-    df['timeform'] = df['timeform'].fillna(4)  # Assigning '4' to empty TimeForms
+    df['timeform'] = df['timeform'].fillna(
+        4)  # Assigning '4' to empty TimeForms
 
     df = df.dropna(subset=['oddschecker'])
     # df['oddschecker'] = df['oddschecker'].fillna(value=1000)
@@ -260,9 +276,12 @@ def prepare_new_dataset(df):
 
     # df = df[df['started'] <= 3]  # Filtering only favourite horse of each race
 
-    df['best_position'] = df[['race-1', 'race-2', 'race-3', 'race-4', 'race-5']].min(axis=1)
-    df['best_position_adv1'] = df[['adv1-1', 'adv1-2', 'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
-    df['best_position_adv2'] = df[['adv2-1', 'adv2-2', 'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
+    df['best_position'] = df[['race-1', 'race-2',
+                              'race-3', 'race-4', 'race-5']].min(axis=1)
+    df['best_position_adv1'] = df[['adv1-1', 'adv1-2',
+                                   'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
+    df['best_position_adv2'] = df[['adv2-1', 'adv2-2',
+                                   'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
 
     df = df.dropna(subset=['best_position'])
     df = df.dropna(subset=['best_position_adv1'])
@@ -273,12 +292,15 @@ def prepare_new_dataset(df):
     # df['best_position_adv2'] = df['best_position_adv2'].fillna(value=99)
 
     df['won_last_race'] = df.apply(lambda x: is_winner(x['race-1']), axis=1)
-    df['won_last_race_adv1'] = df.apply(lambda x: is_winner(x['adv1-1']), axis=1)
-    df['won_last_race_adv2'] = df.apply(lambda x: is_winner(x['adv2-1']), axis=1)
+    df['won_last_race_adv1'] = df.apply(
+        lambda x: is_winner(x['adv1-1']), axis=1)
+    df['won_last_race_adv2'] = df.apply(
+        lambda x: is_winner(x['adv2-1']), axis=1)
 
     df['jockey_won_last_15_days'] = df['jockey_won_last_15_days'].fillna(0)
     df['jockey_won_yesterday'] = df['jockey_won_yesterday'].fillna(0)
-    df = df.drop_duplicates().sort_values(by=['date', 'time', 'city', 'started'], ignore_index=True)
+    df = df.drop_duplicates().sort_values(
+        by=['date', 'time', 'city', 'started'], ignore_index=True)
 
     return df
 
@@ -287,8 +309,10 @@ def place_bet_income(income_pred):
     return 1 if income_pred > 0.5 else 0
 
 
-def place_bet(win_chance):
-    return 1 if win_chance > 0.5 else 0
+def place_bet(win_chance, odd=0):
+    if ((win_chance - 0.2) * odd) - ((1.2 - win_chance) * 1) > 0:
+        return 1
+    return 0
 
 
 def place_bet_2(df, index, win_chance):
@@ -321,11 +345,12 @@ def new_strategy(df):
     #     except:
     #         pass
 
-    bet_df = df.loc[(df['win_chance'] > 0.5) & (df['betfair_back'] >= 1.2)]
-    non_bet_df = df.loc[df['win_chance'] <= 0.5]
-    non_bet_df = non_bet_df.sort_values(by=['loose_chance'], ignore_index=True)
+    bet_df = df[df['winner_pred'] == 1]
+    # bet_df = df.loc[(df['win_chance'] > 0.5) & (df['betfair_back'] >= 1.2)]
+    # non_bet_df = df.loc[df['win_chance'] <= 0.5]
+    # non_bet_df = non_bet_df.sort_values(by=['loose_chance'], ignore_index=True)
 
-    new_df = bet_df.append(non_bet_df.loc[:2])
+    # new_df = bet_df.append(non_bet_df.loc[:2])
 
     # df = df[df['won_last_race'] == 0]
     # df = df[df['best_position'] > 1]
@@ -337,7 +362,7 @@ def new_strategy(df):
     # # df = df[df['odds'] > 1.00]
     # df = df.drop_duplicates(subset=['date', 'time', 'city'], keep='last')
 
-    return new_df
+    return bet_df
 
 
 def acerto(winner, winner_pred):
@@ -348,7 +373,8 @@ def acerto(winner, winner_pred):
 
 
 def horse_last_results(df_history, horse, date, i):
-    df = df_history[(df_history['horse'] == horse) & (df_history['date'] < date)]
+    df = df_history[(df_history['horse'] == horse)
+                    & (df_history['date'] < date)]
     df.reset_index(inplace=True)
     try:
         return df.loc[len(df) - i, 'finished_int']
@@ -473,7 +499,8 @@ def find_jockey(df_history, horse, jockey):
             jockey = jockey.replace(".", "")
             new_df = df_history[df_history['horse'] == horse]
             new_df.dropna(subset=['jockey'], inplace=True)
-            new_df.sort_values(by=['date'], ascending=False, ignore_index=True, inplace=True)
+            new_df.sort_values(by=['date'], ascending=False,
+                               ignore_index=True, inplace=True)
             for index, column in new_df.iterrows():
                 if column['jockey'][-3] == jockey[-3]:
                     return column['jockey']
@@ -499,22 +526,25 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
         if 'going' not in df:
             df['going'] = 'standard'
 
-        df_going = pd.DataFrame({"going": df.apply(lambda x: going(x['going']), axis=1)})
+        df_going = pd.DataFrame(
+            {"going": df.apply(lambda x: going(x['going']), axis=1)})
         df = df.drop(columns=['going'])
         df = df.join(df_going)
 
-        df = df[df['betfair_back'] < 999]
+        #df = df[df['betfair_back'] < 999]
 
         new_df = df['odd_list'].str.split(pat=r"\[|\]|, ", expand=True, n=25)
         new_df.fillna('0', inplace=True)
 
         # df['odds'] = new_df.apply(lambda x: betting_house(x), axis=1)
-        df['odds'] = new_df[11].fillna('0').replace('', '0').astype('float32')
-        df['jockey'] = df.apply(lambda x: find_jockey(df_history, x['horse'], x['jockey']), axis=1)
+        # df['odds'] = new_df[11].fillna('0').replace('', '0').astype('float32')
+        # df['jockey'] = df.apply(lambda x: find_jockey(
+        #    df_history, x['horse'], x['jockey']), axis=1)
 
     df.reset_index(drop=True, inplace=True)
 
-    df.sort_values(by=['date', 'city', 'time', 'odds'], ignore_index=True, inplace=True)
+    df.sort_values(by=['date', 'city', 'time', 'odds'],
+                   ignore_index=True, inplace=True)
 
     # Started
     count = 1
@@ -537,29 +567,41 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
 
     if not pre_race:
         # Finished
-        df.sort_values(by=['date', 'city', 'time', 'started'], ignore_index=True, inplace=True)
-        df['finished_int'] = df.apply(lambda x: finishing_position(x['finished'], x['horses_race']), axis=1)
+        df.sort_values(by=['date', 'city', 'time', 'started'],
+                       ignore_index=True, inplace=True)
+        df['finished_int'] = df.apply(lambda x: finishing_position(
+            x['finished'], x['horses_race']), axis=1)
 
         # Winner
         df['winner'] = df.apply(lambda x: is_winner(x['finished']), axis=1)
 
-    df.sort_values(by=['date', 'city', 'time', 'started'], ignore_index=True, inplace=True)
+    df.sort_values(by=['date', 'city', 'time', 'started'],
+                   ignore_index=True, inplace=True)
     df[f'adv1'] = df.apply(lambda x: adv(df, x.name, x.started), axis=1)
-    df[f'adv1_odd'] = df.apply(lambda x: odd_adv(df, x.name, x.started), axis=1)
+    df[f'adv1_odd'] = df.apply(
+        lambda x: odd_adv(df, x.name, x.started), axis=1)
 
     df[f'adv2'] = df.apply(lambda x: adv2(df, x.name, x.started), axis=1)
-    df[f'adv2_odd'] = df.apply(lambda x: odd_adv2(df, x.name, x.started), axis=1)
+    df[f'adv2_odd'] = df.apply(
+        lambda x: odd_adv2(df, x.name, x.started), axis=1)
 
     # Horse's last results
-    df_history.sort_values(by=['horse', 'date'], ignore_index=True, inplace=True)
+    df_history.sort_values(by=['horse', 'date'],
+                           ignore_index=True, inplace=True)
+    print(datetime.now(), 'Last Results')
     for i in range(1, 6):
-        df[f'race-{i}'] = df.apply(lambda x: horse_last_results(df_history, x.horse, x.date, i), axis=1)
+        df[f'race-{i}'] = df.apply(lambda x: horse_last_results(
+            df_history, x.horse, x.date, i), axis=1)
 
+    print(datetime.now(), 'Race Adv')
     for i in range(1, 6):
-        df[f'adv1-{i}'] = df.apply(lambda x: race_adv(df, x.name, x.started, i), axis=1)
+        df[f'adv1-{i}'] = df.apply(lambda x: race_adv(df,
+                                   x.name, x.started, i), axis=1)
 
+    print(datetime.now(), 'Race Adv2')
     for i in range(1, 6):
-        df[f'adv2-{i}'] = df.apply(lambda x: race_adv2(df, x.name, x.started, i), axis=1)
+        df[f'adv2-{i}'] = df.apply(lambda x: race_adv2(df,
+                                   x.name, x.started, i), axis=1)
 
     # # Best positions & Won Last Races
     for i in range(1, 6):
@@ -567,19 +609,30 @@ def prepare_bbc_dataset(df, df_history, pre_race=False):
         df[f'adv1-{i}'] = pd.to_numeric(df[f'adv1-{i}'], errors='coerce')
         df[f'adv2-{i}'] = pd.to_numeric(df[f'adv2-{i}'], errors='coerce')
 
-    df['best_position'] = df[['race-1', 'race-2', 'race-3', 'race-4', 'race-5']].min(axis=1)
-    df['best_position_adv1'] = df[['adv1-1', 'adv1-2', 'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
-    df['best_position_adv2'] = df[['adv2-1', 'adv2-2', 'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
+    df['best_position'] = df[['race-1', 'race-2',
+                              'race-3', 'race-4', 'race-5']].min(axis=1)
+    df['best_position_adv1'] = df[['adv1-1', 'adv1-2',
+                                   'adv1-3', 'adv1-4', 'adv1-5']].min(axis=1)
+    df['best_position_adv2'] = df[['adv2-1', 'adv2-2',
+                                   'adv2-3', 'adv2-4', 'adv2-5']].min(axis=1)
 
     df['won_last_race'] = df.apply(lambda x: is_winner(x['race-1']), axis=1)
-    df['won_last_race_adv1'] = df.apply(lambda x: is_winner(x['adv1-1']), axis=1)
-    df['won_last_race_adv2'] = df.apply(lambda x: is_winner(x['adv2-1']), axis=1)
+    df['won_last_race_adv1'] = df.apply(
+        lambda x: is_winner(x['adv1-1']), axis=1)
+    df['won_last_race_adv2'] = df.apply(
+        lambda x: is_winner(x['adv2-1']), axis=1)
 
     # Jockey's last results
-    df_history.sort_values(by=['jockey', 'date'], ignore_index=True, inplace=True)
+    # df_history.sort_values(by=['jockey', 'date'],
+    #                       ignore_index=True, inplace=True)
 
-    df['jockey_won_yesterday'] = df.apply(lambda x: jockey_last_x_days(df_history, x.jockey, x.date, 1), axis=1)
-    df['jockey_won_last_15_days'] = df.apply(lambda x: jockey_last_x_days(df_history, x.jockey, x.date, 15), axis=1)
+    # print(datetime.now(), 'Jockey Yesterday')
+    # df['jockey_won_yesterday'] = df.apply(
+    #     lambda x: jockey_last_x_days(df_history, x.jockey, x.date, 1), axis=1)
+
+    # print(datetime.now(), 'Jockey 15 days')
+    # df['jockey_won_last_15_days'] = df.apply(
+    #     lambda x: jockey_last_x_days(df_history, x.jockey, x.date, 15), axis=1)
 
     return df
 
@@ -614,28 +667,40 @@ def prepare_model_dataset(df, run=False, le=None):
 
     df['going'] = le.transform(df['going'])
 
-    if run:
-        df['distance_int'] = df.apply(lambda x: distance_in_yards(x.race_type), axis=1)
-        df['hurdle'] = df.apply(lambda x: race_category(x.race_type, 'hrd'), axis=1)
-        df['chase'] = df.apply(lambda x: race_category(x.race_type, 'chs'), axis=1)
-        df['stakes'] = df.apply(lambda x: race_category(x.race_type, 'stks'), axis=1)
-        df['handicap'] = df.apply(lambda x: race_category(x.race_type, 'hcap'), axis=1)
-        df['novice'] = df.apply(lambda x: race_category(x.race_type, 'nov'), axis=1)
+    # if run:
+    #     df['distance_int'] = df.apply(
+    #         lambda x: distance_in_yards(x.race_type), axis=1)
+    #     df['hurdle'] = df.apply(
+    #         lambda x: race_category(x.race_type, 'hrd'), axis=1)
+    #     df['chase'] = df.apply(
+    #         lambda x: race_category(x.race_type, 'chs'), axis=1)
+    #     df['stakes'] = df.apply(
+    #         lambda x: race_category(x.race_type, 'stks'), axis=1)
+    #     df['handicap'] = df.apply(
+    #         lambda x: race_category(x.race_type, 'hcap'), axis=1)
+    #     df['novice'] = df.apply(
+    #         lambda x: race_category(x.race_type, 'nov'), axis=1)
 
-    else:
-        df['distance_int'] = df.apply(lambda x: distance_bbc(x.distance), axis=1)
-        df['hurdle'] = df.apply(lambda x: race_category(x.title, 'hurdle'), axis=1)
-        df['chase'] = df.apply(lambda x: race_category(x.title, 'chase'), axis=1)
-        df['stakes'] = df.apply(lambda x: race_category(x.title, 'stakes'), axis=1)
-        df['handicap'] = df.apply(lambda x: race_category(x.title, 'handicap'), axis=1)
-        df['novice'] = df.apply(lambda x: race_category(x.title, 'novice'), axis=1)
+    # else:
+    #     df['distance_int'] = df.apply(
+    #         lambda x: distance_bbc(x.distance), axis=1)
+    #     df['hurdle'] = df.apply(
+    #         lambda x: race_category(x.title, 'hurdle'), axis=1)
+    #     df['chase'] = df.apply(
+    #         lambda x: race_category(x.title, 'chase'), axis=1)
+    #     df['stakes'] = df.apply(
+    #         lambda x: race_category(x.title, 'stakes'), axis=1)
+    #     df['handicap'] = df.apply(
+    #         lambda x: race_category(x.title, 'handicap'), axis=1)
+    #     df['novice'] = df.apply(
+    #         lambda x: race_category(x.title, 'novice'), axis=1)
 
-        df['betfair_back'] = df['odds'] + 1
+    #     df['betfair_back'] = df['odds'] + 1
 
-        df['income'] = df.apply(lambda row: financial_result(CONSERVADOR,
-                                                             row['betfair_back'],
-                                                             row['winner']),
-                                axis=1)
+    #     df['income'] = df.apply(lambda row: financial_result(CONSERVADOR,
+    #                                                          row['betfair_back'],
+    #                                                          row['winner']),
+    #                             axis=1)
 
     df['adv1_odd'] = df['adv1_odd'] - df['odds']
     df['adv2_odd'] = df['adv2_odd'] - df['odds']

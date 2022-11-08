@@ -1,11 +1,7 @@
-/dog
 /horse/bases
 /horse/modelos/
-
-/horse/test.py
-/horse/test2.py
-
 .idea
 *__pycache__
+.vscode
 *.log
-/.github/
+/.github

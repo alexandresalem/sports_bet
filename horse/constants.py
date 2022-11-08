@@ -2,10 +2,14 @@
 import os
 
 # LINUX
-BASES_DIR = f'{os.path.expanduser("~")}/Projects/sportsbet/horse/bases'
-MODELOS_DIR = f'{os.path.expanduser("~")}/Projects/sportsbet/horse/modelos'
-TEMPLATES_DIR = f'{os.path.expanduser("~")}/Projects/sportsbet/horse/templates'
-WEBDRIVER_PATH = os.path.realpath(os.path.join(BASES_DIR, 'chromedriver'))
+BASES_DIR = os.path.join(os.path.expanduser(
+    "~"), 'Projects', 'sports_bet', 'horse', 'bases')
+MODELOS_DIR = os.path.join(os.path.expanduser(
+    "~"), 'Projects', 'sports_bet', 'horse', 'modelos')
+TEMPLATES_DIR = os.path.join(os.path.expanduser(
+    "~"), 'Projects', 'sports_bet', 'horse', 'templates')
+WEBDRIVER_PATH = os.path.join(os.path.expanduser(
+    "~"), 'Projects', 'sports_bet', 'horse', 'chromedriver.exe')
 
 # WINDOWS
 # BASES_DIR = r'H:\sportsbet\horse\bases'
@@ -14,15 +18,16 @@ WEBDRIVER_PATH = os.path.realpath(os.path.join(BASES_DIR, 'chromedriver'))
 # WEBDRIVER_PATH = r'H:\sportsbet\horse\chromedriver.exe'
 
 ATTHERACE_DIR = '0_attherace'
+RACES_LINK_DIR = '0_races_link'
 ODDSCHECKER_DIR = '1_oddschecker'
 BETFAIR_DIR = '2_betfair'
-ODDFAIR_DIR = '3_betfair+oddschecker'
+ODDFAIR_DIR = '3_betfair_oddschecker'
 BETS_DIR = '4_palpites'
 BBC_DIR = '5_bbc'
 BBC_PICKLE_DIR = '5_bbc_pickle'
 DAILY_BASES_DIR = '6_bases_diarias'
 HISTORICAL_BASES_DIR = '7_bases_historicas'
-BETS_RESULT_DIR = '8_palpites+bbc'
+BETS_RESULT_DIR = '8_palpites_bbc'
 FINANCEIRO_DIR = '9_financeiro'
 
 # SCRAPPER
@@ -39,7 +44,8 @@ AGRESSIVO = 8
 MINUTES_INTERVAL = 3
 RACING_HOURS = range(12, 21)
 
+TELEGRAM_API_KEY = "5640169397:AAH0u2mlh8I-UcVKQutRw8zztvLyDAZ8pcg"
+
 # MAILING LIST
 # FINANCE_MAIL_LIST = []
-FINANCE_MAIL_LIST = ['timigoandroid@gmail.com', 'rlouroa@hotmail.com', 'me@alexandresalem.com']
-
+FINANCE_MAIL_LIST = ['me@alexandresalem.com']

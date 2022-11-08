@@ -1,61 +1,23 @@
-import logging
-import sys
-sys.path.append('/home/alexandresalem/Projects/sportsbet')
+from datetime import datetime
 
-from datetime import datetime, timedelta
-from horse.bases import post_race_base, pre_race_base
-from horse.constants import RACING_HOURS
-from horse.finance import new_daily_bets_result, new_monthly_results
+from horse.bases import merging_bases
+from horse.bet import Bet
 from horse.mail import mail_bets
 from horse.models import run_new_model
-from horse.scrapper import oddschecker, betfair, bbc
+from horse.scheduler import schedule_tasks
+from horse.utils import logger
 
 if __name__ == "__main__":
-    date_us = datetime.now()
-    date_uk = datetime.utcnow()
-    tomorrow_uk = date_uk + timedelta(days=1)
-    yesterday_uk = date_uk - timedelta(days=1)
-    hour_us = date_us.hour
-    hour_uk = date_uk.hour
-    if hour_uk in RACING_HOURS:
-        # Durante o expediente, atualiza somente o resultado dos palpites
-        driver, races = oddschecker(date_uk.strftime('%Y.%m.%d'), next_day_screen=False, racing_hours=True)
-
-        if races:
-            betfair(date_uk.strftime('%Y.%m.%d'), next_day_screen=False, racing_hours=True, driver=driver)
-            driver.close()
-            driver.quit()
-
-            pre_race_base(date_uk.strftime('%Y.%m.%d'), racing_hours=True)
-            run_new_model(date_uk.strftime("%Y.%m.%d"), racing_hours=True)
-            # mail_bets(date_uk.strftime("%Y.%m.%d"))
+    try:
+        bets = Bet()
+        bets.scrap()
+        merging_bases(bets.date_uk.strftime('%Y.%m.%d'), bets.racing_hours)
+        run_new_model(bets.date_uk.strftime("%Y.%m.%d"),
+                      racing_hours=bets.racing_hours)
+        if not bets.racing_hours:
+            schedule_tasks(bets.race_times, bets.date_uk)
         else:
-            driver.close()
-            driver.quit()
-
-    elif hour_uk >= RACING_HOURS[-1]:
-        # # Após as corridas, mas ainda no mesmo dia que os EUA
-        driver, races = oddschecker(tomorrow_uk.strftime('%Y.%m.%d'), next_day_screen=True)
-        betfair(tomorrow_uk.strftime('%Y.%m.%d'), next_day_screen=True, driver=driver)
-        if driver:
-            driver.close()
-            driver.quit()
-
-        pre_race_base(tomorrow_uk.strftime('%Y.%m.%d'))
-        run_new_model(tomorrow_uk.strftime("%Y.%m.%d"))
-
-    elif hour_uk < RACING_HOURS[0]:
-
-        if hour_us >= (24 + date_uk.hour - date_us.hour):
-            driver, races = oddschecker(date_uk.strftime('%Y.%m.%d'), next_day_screen=False)
-            betfair(date_uk.strftime('%Y.%m.%d'), next_day_screen=True, driver=driver)
-        else:
-            driver, races = oddschecker(date_uk.strftime('%Y.%m.%d'), next_day_screen=False)
-            betfair(date_uk.strftime('%Y.%m.%d'), next_day_screen=False, driver=driver)
-
-        if driver:
-            driver.close()
-            driver.quit()
-
-        pre_race_base(date_uk.strftime('%Y.%m.%d'))
-        run_new_model(date_uk.strftime("%Y.%m.%d"))
+            mail_bets(bets.date_uk.strftime("%Y.%m.%d"), bets.racing_hours)
+        bets.send_telegram_predictions()
+    except Exception as e:
+        logger.info(e)

@@ -1,0 +1,1 @@
+"C:\Users\Alexandre\Projects\venv\bet\Scripts\python.exe" "C:\Users\Alexandre\Projects\sports_bet\horse\main.py"
